@@ -7,15 +7,16 @@ class SunnyNet_1x1(nn.Module):
     '''
     this is built to work with [6,400,1,1] input data and to output [6,400,1,1] outputs
     '''
-    def __init__(self, channels, depth, height, width):
+    def __init__(self, in_channels, out_channels, depth, height, width):
         super().__init__()
-        self.channels = channels
+        self.in_channels = in_channels
+        self.out_channels = out_channels
         self.depth = depth
         self.height = height
         self.width = width
         
         self.conv1 = nn.Conv1d(
-            in_channels = 6, 
+            in_channels = in_channels, 
             out_channels = 32,
             kernel_size = 3,
             padding = 1
@@ -44,7 +45,7 @@ class SunnyNet_1x1(nn.Module):
         self.max3 = nn.MaxPool1d(kernel_size=2, stride = 2)
 
         self.fc1 = nn.Linear(6144, 4700)
-        self.fc2 = nn.Linear(4700, channels*depth)
+        self.fc2 = nn.Linear(4700, out_channels*depth)
 
         #self.dropout = nn.Dropout2d(p=0.5)
         self.dropout = nn.Dropout(p=0.5)
@@ -72,7 +73,7 @@ class SunnyNet_1x1(nn.Module):
         x = self.dropout(x)
         
         x = self.fc2(x)
-        x = x.view(-1, self.channels, self.depth, 1, 1)      
+        x = x.view(-1, self.out_channels, self.depth, 1, 1)      
         return x
 
 
@@ -81,15 +82,16 @@ class SunnyNet_3x3(nn.Module):
     '''
     this is built to work with [6,400,3,3] input data and to output [6,400,1,1] outputs
     '''
-    def __init__(self, channels, depth, height, width):
+    def __init__(self, in_channels, out_channnels, depth, height, width):
         super().__init__()
-        self.channels = channels
+        self.in_channels = in_channels
+        self.out_channels = out_channels
         self.depth = depth
         self.height = height
         self.width = width
         
         self.conv1 = nn.Conv3d(
-            in_channels = 6, 
+            in_channels = in_channels, 
             out_channels = 32,
             kernel_size = (3,3,3),
             padding = (1,0,0)
@@ -118,7 +120,7 @@ class SunnyNet_3x3(nn.Module):
         self.max3 = nn.MaxPool1d(kernel_size=2, stride = 2)
 
         self.fc1 = nn.Linear(6144, 4700)
-        self.fc2 = nn.Linear(4700, channels*depth)
+        self.fc2 = nn.Linear(4700, out_channels*depth)
 
         #self.dropout = nn.Dropout2d(p=0.5)
         self.dropout = nn.Dropout(p=0.5)
@@ -146,22 +148,23 @@ class SunnyNet_3x3(nn.Module):
         x = self.dropout(x)
         
         x = self.fc2(x)
-        x = x.view(-1, self.channels, self.depth, 1, 1)      
+        x = x.view(-1, self.out_channels, self.depth, 1, 1)      
         return x
 
 class SunnyNet_5x5(nn.Module):
     '''
     this is built to work with [6,400,5,5] input data and to output [6,400,1,1] outputs
     '''
-    def __init__(self, channels, depth, height, width):
+    def __init__(self, in_channels, out_channels, depth, height, width):
         super().__init__()
-        self.channels = channels
+        self.in_channels = in_channels
+        self.out_channels = out_channels
         self.depth = depth
         self.height = height
         self.width = width
         
         self.conv1 = nn.Conv3d(
-            in_channels = 6, 
+            in_channels = in_channels, 
             out_channels = 32,
             kernel_size = (5,5,5),
             padding = (2,0,0)
@@ -190,7 +193,7 @@ class SunnyNet_5x5(nn.Module):
         self.max3 = nn.MaxPool1d(kernel_size=2, stride = 2)
 
         self.fc1 = nn.Linear(6144, 4700)
-        self.fc2 = nn.Linear(4700, channels*depth)
+        self.fc2 = nn.Linear(4700, out_channels*depth)
 
         #self.dropout = nn.Dropout2d(p=0.5)
         self.dropout = nn.Dropout(p=0.5)
@@ -218,7 +221,7 @@ class SunnyNet_5x5(nn.Module):
         x = self.dropout(x)
         
         x = self.fc2(x)
-        x = x.view(-1, self.channels, self.depth, 1, 1)      
+        x = x.view(-1, self.out_channels, self.depth, 1, 1)      
         return x
     
 
@@ -226,15 +229,16 @@ class SunnyNet_7x7(nn.Module):
     '''
     this is built to work with [6,400,7,7] input data and to output [6,400,1,1] outputs
     '''
-    def __init__(self, channels, depth, height, width):
+    def __init__(self, in_channels, out_channels, depth, height, width):
         super().__init__()
-        self.channels = channels
+        self.in_channels = in_channels
+        self.out_channels = out_channels
         self.depth = depth
         self.height = height
         self.width = width
         
         self.conv1 = nn.Conv3d(
-            in_channels = 6, 
+            in_channels = in_channels, 
             out_channels = 32,
             kernel_size = (7,7,7),
             padding = (3,0,0)
@@ -263,7 +267,7 @@ class SunnyNet_7x7(nn.Module):
         self.max3 = nn.MaxPool1d(kernel_size=2, stride = 2)
 
         self.fc1 = nn.Linear(6144, 4700)
-        self.fc2 = nn.Linear(4700, channels*depth)
+        self.fc2 = nn.Linear(4700, out_channels*depth)
 
         #self.dropout = nn.Dropout2d(p=0.5)
         self.dropout = nn.Dropout(p=0.5)
@@ -291,5 +295,5 @@ class SunnyNet_7x7(nn.Module):
         x = self.dropout(x)
         
         x = self.fc2(x)
-        x = x.view(-1, self.channels, self.depth, 1, 1)      
+        x = x.view(-1, self.out_channels, self.depth, 1, 1)      
         return x

@@ -39,23 +39,39 @@ from helita.sim.multi3d import Multi3dAtmos, Multi3dOut
 multi3d_path = "/path/to/3D_sim/snapshot_%i/output/"
 multi3d_atmos = '/path/to/3D_sim/atm3d.3D_sim_snapshot%i'
 training_snapshots = [1, 2, 3]
-lte_pops = []
-nlte_pops = []
-rho_mean = []
-z_scale = []
+temp_list = []
+vx_list = []
+vy_list = []
+vz_list = []
+ne_list = []
+lte_pops_list = []
+nlte_pops_list = []
+rho_list = []
+z_scale_list = []
 for s in training_snapshots:
     m3d = Multi3dOut(directory=multi3d_path % s)
     m3d.readall()
-    lte_pops.append(m3d.atom.nstar * 1e6)  # cm^-3 to m^-3
-    nlte_pops.append(m3d.atom.n * 1e6)
+    lte_pops_list.append(m3d.atom.nstar * 1e6)  # cm^-3 to m^-3
+    nlte_pops_list.append(m3d.atom.n * 1e6)
     nx, ny, nz, nlevel = m3d.atom.nstar.shape
     atmos = Multi3dAtmos(multi3d_atmos % s, nx, ny, nz)
-    rho = atmos.rho
-    rho_mean.append(np.mean(rho, axis=(0,1)) * 1e3)  #  g cm-3 to kg m-3
-    z_scale.append(m3d.geometry.z * 1e-2)  # cm to m
+    rho_list.append(atmos.rho * 1e3)  #  g cm-3 to kg m-3
+    z_scale_list.append(m3d.geometry.z * 1e-2)  # cm to m
+    temp_list.append(atmos.temp)
+    vx_list.append(atmos.vx * 1e3) # km s-1 to m s-1
+    vy_list.append(atmos.vy * 1e3) # km s-1 to m s-1
+    vz_list.append(atmos.vz * 1e3) # km s-1 to m s-1
+    ne_list.append(atmos.ne * 1e6) #  cm-3 to m-3
+    
 
-SunnyNet.build_training_set(lte_pops, nlte_pops, rho_mean, z_scale, 
-              save_path='3D_sim_train_s123.hdf5', ndep=400, pad=1, tr_percent=85)
+
+SunnyNet.build_training_set(
+    temp_list, vx_list, vy_list, vz_list,
+    ne_list, lte_pops_list, nlte_pops_list,
+    rho_list, z_scale_list,
+    save_path='3D_sim_train_s123.hdf5',
+    ndep=400, pad=1, tr_percent=85
+)
 
 # 2. Train network
 SunnyNet.sunnynet_train_model('3D_sim_train_s123.hdf5', 'training/', 

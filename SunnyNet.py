@@ -79,8 +79,13 @@ def build_solving_set(lte_pops, rho_mean, z_scale, save_path="example.hdf5", nde
         dset4 = f.create_dataset("z", data=new_z, dtype='f')
 
 
-def build_training_set(lte_pops, nlte_pops, rho_mean, z_scale,
-                       save_path="example.hdf5", ndep=400, pad=1, tr_percent=85):
+def build_training_set(
+    temp_list, vx_list, vy_list, vz_list,
+    ne_list, lte_pops_list, nlte_pops_list,
+    rho_list, z_scale_list,
+    save_path="example.hdf5", ndep=400,
+    pad=1, tr_percent=85
+):
     """
     Prepares populations from 3D simulation into a file to be fed into a network
     for training and validation.
@@ -120,7 +125,22 @@ def build_training_set(lte_pops, nlte_pops, rho_mean, z_scale,
         Percent of data to be used as a training set (the rest will be used
         for validation).
     """
-    nx, ny, _, nlevels = lte_pops[0].shape
+
+    def interpolate_everything(rho_super_arr, z_scale, pops_super_array, new_cmass_scale):
+
+        def iterpolate_data(rho_arr, z_scale, pops_array, new_cmass_scale):
+            cmass_arr = cumulative_trapezoid(rho_arr, -z_scale, initial=0)
+            interp_func = interp1d(
+                cmass_arr, pops_array,
+                kind='linear', axis=0, fill_value='extrapolate'
+            )
+            return interp_func(new_cmass_scale)
+
+        vec_iterpolate_data = np.vectorize(iterpolate_data, signature='(n),(n),(n,o),(m)->(m,o)')
+
+        return vec_iterpolate_data(rho_super_arr, z_scale, pops_super_array, new_cmass_scale)
+
+    nx, ny, _, nlevels = lte_pops_list[0].shape
     k = nx * ny  # number of training/validation instances combined (helps control output file size)
     grid = nx + 2*pad  # accounts for expanding to include periodic BC's
     npad = ((pad,pad),(pad,pad),(0,0),(0,0))
@@ -130,40 +150,54 @@ def build_training_set(lte_pops, nlte_pops, rho_mean, z_scale,
     lte_list = []
     non_lte_list = []
 
-    for lte_in, nlte_in, rho_in, z in zip(lte_pops, nlte_pops, rho_mean, z_scale):
+    for temp_in, vx_in, vy_in, vz_in, ne_in, lte_in, nlte_in, rho_in, z_in in zip(
+        temp_list, vx_list, vy_list, vz_list,
+        ne_list, lte_pops_list, nlte_pops_list,
+        rho_list, z_scale_list
+    ):
         print(f'rho shape {rho_in.shape}')
-        print(f'z shape {z.shape}')
-        cmass_mean = cumtrapz(rho_in, -z, initial=0)
-        cmass_scale = np.logspace(-6, 2, ndep)
-        print('Interpolating functions...')
-        f_lte = interp1d(cmass_mean, lte_in, kind='linear', 
-                         axis=2, fill_value='extrapolate')
-        f_non_lte = interp1d(cmass_mean, nlte_in, kind='linear', 
-                             axis=2, fill_value='extrapolate')
-        print('Applying new scale...')
-        lte = f_lte(cmass_scale)
-        non_lte = f_non_lte(cmass_scale)
+        print(f'z shape {z_in.shape}')
+        new_cmass_scale = np.logspace(-6, 2, ndep)
+        temp = np.log10(temp_in)
+        vx = vx_in / 100
+        vy = vy_in / 100
+        vz_in = vy_in / 100
+        ne = np.log10(ne_in)
+        merged_input = np.stack(
+            [
+                temp,
+                vx_in,
+                vy_in,
+                vz_in,
+                ne
+            ],
+            axis=-1
+        )
+        departure_coeff = nlte_in / lte_in
+        departure_coeff = np.log10(departure_coeff)
+        merged_input = interpolate_everything(rho_in, z_in, merged_input, new_cmass_scale)
+        departure_coeff = interpolate_everything(rho_in, z_in, departure_coeff, new_cmass_scale)
         print('Padding data...')
-        lte = np.pad(lte, pad_width=npad, mode='wrap')
-        non_lte = np.pad(non_lte, pad_width=npad, mode='wrap')
+        merged_input = np.pad(merged_input, pad_width=npad, mode='wrap')
+        departure_coeff = np.pad(departure_coeff, pad_width=npad, mode='wrap')
         print('Log and transpose...')
-        lte = np.transpose(np.log10(lte), (3,2,0,1))
-        non_lte = np.transpose(np.log10(non_lte), (3,2,0,1))
+        merged_input = np.transpose(merged_input, (3,2,0,1))
+        departure_coeff = np.transpose(departure_coeff, (3,2,0,1))
         print('Scaling data...')
-        mu_inp = lte.mean(axis=(1,2,3))[:, np.newaxis, np.newaxis, np.newaxis]
-        std_inp = lte.std(axis=(1,2,3))[:, np.newaxis, np.newaxis, np.newaxis]
-        mu_out = non_lte.mean(axis=(1,2,3))[:, np.newaxis, np.newaxis, np.newaxis]
-        std_out = non_lte.std(axis=(1,2,3))[:, np.newaxis, np.newaxis, np.newaxis]
-        lte = (lte - mu_inp)/std_inp
-        non_lte = (non_lte - mu_out)/std_out
+        mu_inp = merged_input.mean(axis=(1,2,3))[:, np.newaxis, np.newaxis, np.newaxis]
+        std_inp = merged_input.std(axis=(1,2,3))[:, np.newaxis, np.newaxis, np.newaxis]
+        mu_out = departure_coeff.mean(axis=(1,2,3))[:, np.newaxis, np.newaxis, np.newaxis]
+        std_out = departure_coeff.std(axis=(1,2,3))[:, np.newaxis, np.newaxis, np.newaxis]
+        merged_input = (merged_input - mu_inp)/std_inp
+        departure_coeff = (departure_coeff - mu_out)/std_out
         print(f"Splitting simulation into corresponding window / columns...")
         for i in range(pad, grid-pad):
             for j in range(pad, grid-pad):
                 # lte window
-                sample = lte[:, :, i-pad:i+(pad+1), j-pad:j+(pad+1)]
+                sample = merged_input[:, :, i-pad:i+(pad+1), j-pad:j+(pad+1)]
                 lte_list.append(sample)
                 # non lte in middle of window
-                true = non_lte[:, :, i, j][:, :, np.newaxis, np.newaxis]
+                true = departure_coeff[:, :, i, j][:, :, np.newaxis, np.newaxis]
                 non_lte_list.append(true)
     print(f"Train / Test Split...")
     # Get train/test indicies
@@ -209,14 +243,16 @@ def read_train_params(train_file):
     and ndep from existing SunnyNet training HDF5 file.
     """
     tmp = h5py.File(train_file, 'r')
-    buf = tmp['lte training windows'].shape
-    train_size = buf[0]
+    in_buf = tmp['lte training windows'].shape
+    out_buf = tmp['non lte training points'].shape
+    train_size = in_buf[0]
     test_size = tmp['lte test windows'].shape[0]
-    channels = buf[1]
-    ndep = buf[2]
-    pad = (buf[-1] - 1) // 2
+    in_channels = in_buf[1]
+    out_channels = out_buf[1]
+    ndep = in_buf[2]
+    pad = (in_buf[-1] - 1) // 2
     tmp.close()
-    return train_size, test_size, channels, ndep, pad
+    return train_size, test_size, in_channels, out_channels, ndep, pad
 
 
 def read_solve_params(solve_file):
@@ -224,26 +260,24 @@ def read_solve_params(solve_file):
     Reads the atmospheric dimensions from existing SunnyNet "solving" HDF5 file.
     """
     tmp = h5py.File(solve_file, 'r')
-    buf = tmp['lte test windows'].shape
-    nx = int(np.sqrt(buf[0]))
-    channels = buf[1]
-    ndep = buf[2]
-    pad = (buf[-1] - 1) // 2
-    return nx, channels, ndep, pad
+    in_buf = tmp['lte test windows'].shape
+    out_buf = tmp['non lte test points'].shape
+    nx = int(np.sqrt(in_buf[0]))
+    in_channels = in_buf[1]
+    out_channels = out_buf[1]
+    ndep = in_buf[2]
+    pad = (in_buf[-1] - 1) // 2
+    return nx, in_channels, out_channels, ndep, pad
     
 
-def check_model_compat(model_type, pad, channels):
+def check_model_compat(model_type, pad):
     if model_type == 'SunnyNet_1x1':
-        m_channels = 6
         m_pad = 0
     elif model_type == 'SunnyNet_3x3':
-        m_channels = 6
         m_pad = 1
     elif model_type == 'SunnyNet_5x5':
-        m_channels = 6
         m_pad = 2
     elif model_type == 'SunnyNet_7x7':
-        m_channels = 6
         m_pad = 3
     else:
         raise ValueError(f"Unknown model type: {model_type}")
@@ -294,10 +328,10 @@ def sunnynet_train_model(train_path, save_folder, save_file, model_type='SunnyNe
         raise IOError("Output file already exists, refusing to overwrite.")
     if not os.path.isdir(save_folder):
         os.mkdir(save_folder)
-    train_size, test_size, channels, ndep, pad = read_train_params(train_path)
-    if not check_model_compat(model_type, pad, channels):
+    train_size, test_size, in_channels, out_channels, ndep, pad = read_train_params(train_path)
+    if not check_model_compat(model_type, pad):
         raise ValueError(f"Incompatible sizes between model {model_type} "
-                         f"and training set (pad={pad}, channels={channels})")
+                         f"and training set (pad={pad})")
     params = {
         'model': model_type, # pick one from networkUtilities/modelArchitectures.py
         # only works with Adam right now, 
@@ -305,7 +339,8 @@ def sunnynet_train_model(train_path, save_folder, save_file, model_type='SunnyNe
         'optimizer': 'Adam',  
         'loss_fxn': loss_function, 
         'learn_rate': 1e-3,
-        'channels': channels,
+        'in_channels': in_channels,
+        'out_channels': out_channels,
         'features': ndep,
         'cuda': {'use_cuda': cuda, 'multi_gpu': False},
         'mode': 'training'
@@ -402,12 +437,13 @@ def sunnynet_predict_populations(model_path, train_path, test_path, save_path,
         Weight in loss calculation between mass conservation and cell by
         cell error. Default is 0.2. To switch off entirely set to None.
     """
-    _, _, channels, ndep, pad = read_train_params(train_path)
-    nx, channels1, ndep1, npad1 = read_solve_params(test_path)
-    assert channels == channels1, "Inconsistent number of channels between train and test data"
+    _, _, in_channels, out_channels, ndep, pad = read_train_params(train_path)
+    nx, in_channels1, out_channels1, ndep1, npad1 = read_solve_params(test_path)
+    assert in_channels == in_channels1, "Inconsistent number of input channels between train and test data"
+    assert out_channels1 == out_channels1, "Inconsistent number of output channels between train and test data"
     assert ndep == ndep1, "Inconsistent number of depth points between train and test data"
     assert pad == npad1, "Inconsistent padding number between train and test data"
-    if not check_model_compat(model_type, pad, channels):
+    if not check_model_compat(model_type, pad):
         raise ValueError(f"Incompatible sizes between model {model_type} "
                          f"and training set (pad={pad}, channels={channels})")    
     if os.path.isfile(save_path):
@@ -416,7 +452,8 @@ def sunnynet_predict_populations(model_path, train_path, test_path, save_path,
         'cuda': cuda,      
         'model': model_type,
         'model_path': model_path,
-        'channels': channels,   # number of atomic levels
+        'in_channels': in_channels,   # number of atomic levels
+        'out_channels': out_channels,
         'features': ndep,       # z dimension
         'mode': 'testing',
         'multi_gpu_train': False,
