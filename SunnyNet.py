@@ -7,7 +7,7 @@ import sys
 import torch
 from torch.utils.data import DataLoader
 from scipy.interpolate import interp1d
-from scipy.integrate import cumtrapz
+from scipy.integrate import cumulative_trapezoid as cumtrapz
 from networkUtils.atmosphereFunctions import predict_populations
 from networkUtils.modelWrapper import Model
 from networkUtils.dataSets import PopulationDataset3d
@@ -129,7 +129,7 @@ def build_training_set(
     def interpolate_everything(rho_super_arr, z_scale, pops_super_array, new_cmass_scale):
 
         def iterpolate_data(rho_arr, z_scale, pops_array, new_cmass_scale):
-            cmass_arr = cumulative_trapezoid(rho_arr, -z_scale, initial=0)
+            cmass_arr = cumtrapz(rho_arr, -z_scale, initial=0)
             interp_func = interp1d(
                 cmass_arr, pops_array,
                 kind='linear', axis=0, fill_value='extrapolate'
