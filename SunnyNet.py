@@ -281,7 +281,7 @@ def check_model_compat(model_type, pad):
         m_pad = 3
     else:
         raise ValueError(f"Unknown model type: {model_type}")
-    if (m_channels == channels) and (m_pad == pad):
+    if m_pad == pad:
         return True
     else:
         return False
