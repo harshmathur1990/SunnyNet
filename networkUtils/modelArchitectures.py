@@ -82,7 +82,7 @@ class SunnyNet_3x3(nn.Module):
     '''
     this is built to work with [6,400,3,3] input data and to output [6,400,1,1] outputs
     '''
-    def __init__(self, in_channels, out_channnels, depth, height, width):
+    def __init__(self, in_channels, out_channels, depth, height, width):
         super().__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
