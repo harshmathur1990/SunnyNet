@@ -31,53 +31,53 @@ class Model():
         
             ## Pick model architecture ##
             if params['model'] == 'Regressor':
-                self.network = Regressor(params['channels'], params['features'])
+                self.network = Regressor(params['in_channels'], params['out_channels'], params['features'])
             elif params['model'] == 'DeeperRegressor':
-                self.network = DeeperRegressor(params['channels'], params['features'])
+                self.network = DeeperRegressor(params['in_channels'], params['out_channels'], params['features'])
             elif params['model'] == 'RegressorBN':
-                self.network = RegressorBN(params['channels'], params['features'])
+                self.network = RegressorBN(params['in_channels'], params['out_channels'], params['features'])
 
             ######################### SUNNYNET ARCHITECTURES ############################ 
             elif params['model'] == 'SunnyNet_1x1':
-                self.network = SunnyNet_1x1(params['channels'], params['features'],1,1)
+                self.network = SunnyNet_1x1(params['in_channels'], params['features'],1,1)
                 
             elif params['model'] == 'SunnyNet_3x3':
-                self.network = SunnyNet_3x3(params['channels'], params['features'],3,3)
+                self.network = SunnyNet_3x3(params['in_channels'], params['out_channels'], params['features'],3,3)
                 
             elif params['model'] == 'SunnyNet_5x5':
-                self.network = SunnyNet_5x5(params['channels'], params['features'],5,5)
+                self.network = SunnyNet_5x5(params['in_channels'], params['out_channels'], params['features'],5,5)
                 
             elif params['model'] == 'SunnyNet_7x7':
-                self.network = SunnyNet_7x7(params['channels'], params['features'],7,7)
+                self.network = SunnyNet_7x7(params['in_channels'], params['out_channels'], params['features'],7,7)
             ######################### SUNNYNET ARCHITECTURES ############################
                 
             elif params['model'] == 'BasicRegressor3D_3x3':
-                self.network = BasicRegressor3D_3x3(params['channels'], params['features'],3,3)
+                self.network = BasicRegressor3D_3x3(params['in_channels'], params['out_channels'], params['features'],3,3)
             elif params['model'] == 'BasicRegressor3D_5x5':
-                self.network = BasicRegressor3D_5x5(params['channels'], params['features'],5,5)
+                self.network = BasicRegressor3D_5x5(params['in_channels'], params['out_channels'], params['features'],5,5)
                 
             elif params['model'] == 'Trans_1x1':
-                self.network = Trans_1x1(params['channels'], params['features'],1,1)
+                self.network = Trans_1x1(params['in_channels'], params['out_channels'], params['features'],1,1)
                 
             elif params['model'] == 'Trans_3x3':
-                self.network = Trans_3x3(params['channels'], params['features'],3,3)
+                self.network = Trans_3x3(params['in_channels'], params['out_channels'], params['features'],3,3)
             
                 
             elif params['model'] == 'Trans_3x3_Deep':
-                self.network = Trans_3x3_Deep(params['channels'], params['features'],[3,3,3])
+                self.network = Trans_3x3_Deep(params['in_channels'], params['out_channels'], params['features'],[3,3,3])
                 
             elif params['model'] == 'Trans_3x3_ResNet':
-                self.network = Trans_3x3_ResNet(params['channels'], params['features'],[4,4,4])
+                self.network = Trans_3x3_ResNet(params['in_channels'], params['out_channels'], params['features'],[4,4,4])
                 
             elif params['model'] == 'Trans_3x3_ResNet_NoBN':
-                self.network = Trans_3x3_ResNet_NoBN(params['channels'], params['features'],[4,4,4])
+                self.network = Trans_3x3_ResNet_NoBN(params['in_channels'], params['out_channels'], params['features'],[4,4,4])
                 
             elif params['model'] == 'Trans_5x5':
-                self.network = Trans_5x5(params['channels'], params['features'],5,5)
+                self.network = Trans_5x5(params['in_channels'], params['out_channels'], params['features'],5,5)
             elif params['model'] == 'Trans_7x7':
-                self.network = Trans_7x7(params['channels'], params['features'],7,7)
+                self.network = Trans_7x7(params['in_channels'], params['out_channels'], params['features'],7,7)
             elif params['model'] == 'Trans_Regressor':
-                self.network = Trans_Regressor(params['channels'], params['features'])
+                self.network = Trans_Regressor(params['in_channels'], params['out_channels'], params['features'])
             
             else:
                 raise Exception("!!Invalid model architecture!!")
@@ -102,7 +102,7 @@ class Model():
 
             ## set loss function ##
             if params['loss_fxn'] == 'WeightedMSE':
-                self.loss_fxn = WeightedMSE(params['height_vector'], params['channels'], 
+                self.loss_fxn = WeightedMSE(params['height_vector'], params['in_channels'], params['out_channels'], 
                                             params['features'], params['loss_w_range'], 
                                             params['loss_scale'], self.device)
             elif params['loss_fxn'] == 'MSELoss':
@@ -121,52 +121,52 @@ class Model():
           
             ## Pick model architecture ##
             if params['model'] == 'Regressor':
-                self.network = Regressor(params['channels'], params['features'])
+                self.network = Regressor(params['in_channels'], params['out_channels'], params['features'])
             elif params['model'] == 'DeeperRegressor':
-                self.network = DeeperRegressor(params['channels'], params['features'])
+                self.network = DeeperRegressor(params['in_channels'], params['out_channels'], params['features'])
             elif params['model'] == 'RegressorBN':
-                self.network = RegressorBN(params['channels'], params['features'])
+                self.network = RegressorBN(params['in_channels'], params['out_channels'], params['features'])
             
             ######################### SUNNYNET ARCHITECTURES ############################ 
             elif params['model'] == 'SunnyNet_1x1':
-                self.network = SunnyNet_1x1(params['channels'], params['features'],1,1)
+                self.network = SunnyNet_1x1(params['in_channels'], params['out_channels'], params['features'],1,1)
                 
             elif params['model'] == 'SunnyNet_3x3':
-                self.network = SunnyNet_3x3(params['channels'], params['features'],3,3)
+                self.network = SunnyNet_3x3(params['in_channels'], params['out_channels'], params['features'],3,3)
                 
             elif params['model'] == 'SunnyNet_5x5':
-                self.network = SunnyNet_5x5(params['channels'], params['features'],5,5)
+                self.network = SunnyNet_5x5(params['in_channels'], params['out_channels'], params['features'],5,5)
                 
             elif params['model'] == 'SunnyNet_7x7':
-                self.network = SunnyNet_7x7(params['channels'], params['features'],7,7)
+                self.network = SunnyNet_7x7(params['in_channels'], params['out_channels'], params['features'],7,7)
             ######################### SUNNYNET ARCHITECTURES ############################
                 
             elif params['model'] == 'BasicRegressor3D_3x3':
-                self.network = BasicRegressor3D_3x3(params['channels'], params['features'],3,3)
+                self.network = BasicRegressor3D_3x3(params['in_channels'], params['out_channels'], params['features'],3,3)
             elif params['model'] == 'BasicRegressor3D_5x5':
-                self.network = BasicRegressor3D_5x5(params['channels'], params['features'],5,5)
+                self.network = BasicRegressor3D_5x5(params['in_channels'], params['out_channels'], params['features'],5,5)
                 
             elif params['model'] == 'Trans_1x1':
-                self.network = Trans_1x1(params['channels'], params['features'],1,1)
+                self.network = Trans_1x1(params['in_channels'], params['out_channels'], params['features'],1,1)
                 
             elif params['model'] == 'Trans_3x3':
-                self.network = Trans_3x3(params['channels'], params['features'],3,3)
+                self.network = Trans_3x3(params['in_channels'], params['out_channels'], params['features'],3,3)
                 
             elif params['model'] == 'Trans_3x3_Deep':
-                self.network = Trans_3x3_Deep(params['channels'], params['features'],[3,3,3])
+                self.network = Trans_3x3_Deep(params['in_channels'], params['out_channels'], params['features'],[3,3,3])
                 
             elif params['model'] == 'Trans_3x3_ResNet':
-                self.network = Trans_3x3_ResNet(params['channels'], params['features'],[4,4,4])
+                self.network = Trans_3x3_ResNet(params['in_channels'], params['out_channels'], params['features'],[4,4,4])
                 
             elif params['model'] == 'Trans_3x3_ResNet_NoBN':
-                self.network = Trans_3x3_ResNet_NoBN(params['channels'], params['features'],[4,4,4])    
+                self.network = Trans_3x3_ResNet_NoBN(params['in_channels'], params['out_channels'], params['features'],[4,4,4])    
                 
             elif params['model'] == 'Trans_5x5':
-                self.network = Trans_5x5(params['channels'], params['features'],5,5)
+                self.network = Trans_5x5(params['in_channels'], params['out_channels'], params['features'],5,5)
             elif params['model'] == 'Trans_7x7':
-                self.network = Trans_7x7(params['channels'], params['features'],7,7)
+                self.network = Trans_7x7(params['in_channels'], params['out_channels'], params['features'],7,7)
             elif params['model'] == 'Trans_Regressor':
-                self.network = Trans_Regressor(params['channels'], params['features'])
+                self.network = Trans_Regressor(params['in_channels'], params['out_channels'], params['features'])
             else:
                 raise Exception("!!Invalid model architecture!!")
                            
@@ -178,7 +178,7 @@ class Model():
             
             ## set loss function ##
             if params['loss_fxn'] == 'WeightedMSE':
-                self.loss_fxn = WeightedMSE(params['height_vector'], params['channels'], 
+                self.loss_fxn = WeightedMSE(params['height_vector'], params['in_channels'], params['out_channels'], 
                                             params['features'], params['loss_w_range'], 
                                             params['loss_scale'], self.device)
             elif params['loss_fxn'] == 'MSELoss':
