@@ -19,7 +19,8 @@ def predict_populations(pop_path, train_data_path, config):
         'cuda': (bool),                # whether to use CUDA for forward pass 
         'model': (str),                # class of model from modelArchitectures.py
         'model_path': (str),           # path to trained model
-        'channels': (int),             # channels (energy levels) of input data of shape [ch, z, x, y]
+        'in_channels': (int),             # channels (number of atmospheric params) of input data of shape [ch, z, x, y]
+        'out_channels': (int),             # channels (energy levels) of input data of shape [ch, z, x, y]
         'features': (int),             # number of depth points. z in [ch, z, x, y]
         'mode': (str),                 # either 'testing' or 'training', going to be testing for this
         'multi_gpu_train': (bool),     # whether the model was traine on multiple GPUs or just 1

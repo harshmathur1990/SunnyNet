@@ -26,7 +26,7 @@ def train(params, model, dataLoaders):
     full_path = os.path.join(params['save_folder'], params['model_save'])
     loss_dict = {'train':[], 'val':[]}
     no_improv = 0
-    min_loss = np.Inf
+    min_loss = np.inf
     stop = False
     
     for epoch in range(params['num_epochs']):
