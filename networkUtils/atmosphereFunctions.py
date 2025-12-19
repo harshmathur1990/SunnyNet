@@ -61,7 +61,6 @@ def predict_populations(pop_path, train_data_path, config):
     
     with h5py.File(pop_path, 'r') as f:
         lte = f['lte test windows'][:]
-        z = f['z'][:]
         cmass_mean = f['column mass'][:]
         cmass_scale = f['column scale'][:]
         

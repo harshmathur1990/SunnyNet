@@ -14,7 +14,27 @@ from networkUtils.dataSets import PopulationDataset3d
 from networkUtils.trainingFunctions import train
 
 
-def build_solving_set(lte_pops, rho_mean, z_scale, save_path="example.hdf5", ndep=400, pad=1):
+def interpolate_everything(rho_super_arr, z_scale, pops_super_array, new_cmass_scale):
+
+    def iterpolate_data(rho_arr, z_scale, pops_array, new_cmass_scale):
+        cmass_arr = cumtrapz(rho_arr, -z_scale, initial=0)
+        interp_func = interp1d(
+            cmass_arr, pops_array,
+            kind='linear', axis=0, fill_value='extrapolate'
+        )
+        return interp_func(new_cmass_scale)
+
+    vec_iterpolate_data = np.vectorize(iterpolate_data, signature='(n),(n),(n,o),(m)->(m,o)')
+
+    return vec_iterpolate_data(rho_super_arr, z_scale, pops_super_array, new_cmass_scale)
+
+
+def build_solving_set(
+    rho, z_scale, temp, vx,
+    vy, vz, ne,
+    save_path="example.hdf5",
+    ndep=400, pad=1
+):
     """
     Prepares populations from 3D simulation into a file to be fed into a trained network
     to make population predictions.
@@ -45,24 +65,33 @@ def build_solving_set(lte_pops, rho_mean, z_scale, save_path="example.hdf5", nde
     if os.path.isfile(save_path):
         raise IOError("Output file already exists. Refusing to overwrite.")
     # check sim dims and see whats gonna happen with interpolation
-    nx, ny, nz, nlevels = lte_pops.shape
-    print(f'Sim shape: ({nx}, {ny}, {nz}), with {nlevels} levels')
-    assert nx == nx, "Resizing function needs X / Y to be equal in length"
+    nx, ny, nz = temp.shape
+    print(f'Sim shape: ({nx}, {ny}, {nz})')
+    assert nx == ny, "Resizing function needs X / Y to be equal in length"
     grid = nx + 2*pad  # account for padding periodic BC's
     npad = ((pad,pad),(pad,pad),(0,0),(0,0))
+    new_cmass_scale = np.logspace(-6, 2, ndep)
+    temp_in = np.log10(temp)
+    vx_in = vx / 100 # divide by 100 km/s
+    vy_in = vy / 100 # divide by 100 km/s
+    vz_in = vy / 100 # divide by 100 km/s
+    ne_in = np.log10(ne)
+    merged_input = np.stack(
+        [
+            temp_in,
+            vx_in,
+            vy_in,
+            vz_in,
+            ne_in
+        ],
+        axis=-1
+    )
+    merged_input = interpolate_everything(rho, z_scale, merged_input, new_cmass_scale)
     print('Padding for periodic boundary conditions...')
-    lte = np.pad(lte_pops, pad_width=npad, mode='wrap')
+    lte = np.pad(merged_input, pad_width=npad, mode='wrap')
     print(f'LTE shape after padding: {lte.shape}')
-    print('Starting Z interpolation...')
-    cmass_mean = cumtrapz(rho_mean, -z_scale, initial=0)
-    cmass_scale = np.logspace(-6, 2, ndep)  # New log column mass scale, -6 to 2
-    print('Interpolating functions...')
-    f_lte = interp1d(cmass_mean, lte, kind='linear', axis=2, fill_value='extrapolate')
-    f_z = interp1d(cmass_mean, z_scale, kind='linear', axis=-1, fill_value='extrapolate')
-    lte = f_lte(cmass_scale)
-    new_z = f_z(cmass_scale)
     print('Rearranging and taking Log10...')
-    lte = np.transpose(np.log10(lte), (3,2,0,1))
+    lte = np.transpose(lte, (3,2,0,1))
     print('Splitting into windows and columns...')
     lte_list = []
     for i in range(pad, grid - pad):
@@ -74,9 +103,6 @@ def build_solving_set(lte_pops, rho_mean, z_scale, save_path="example.hdf5", nde
     print(f'Saving into {save_path}...')
     with h5py.File(save_path, 'w') as f:
         dset1 = f.create_dataset("lte test windows", data=lte, dtype='f')
-        dset2 = f.create_dataset("column mass", data=cmass_mean, dtype='f')
-        dset3 = f.create_dataset("column scale", data=cmass_scale, dtype='f')
-        dset4 = f.create_dataset("z", data=new_z, dtype='f')
 
 
 def build_training_set(
@@ -126,21 +152,7 @@ def build_training_set(
         for validation).
     """
 
-    def interpolate_everything(rho_super_arr, z_scale, pops_super_array, new_cmass_scale):
-
-        def iterpolate_data(rho_arr, z_scale, pops_array, new_cmass_scale):
-            cmass_arr = cumtrapz(rho_arr, -z_scale, initial=0)
-            interp_func = interp1d(
-                cmass_arr, pops_array,
-                kind='linear', axis=0, fill_value='extrapolate'
-            )
-            return interp_func(new_cmass_scale)
-
-        vec_iterpolate_data = np.vectorize(iterpolate_data, signature='(n),(n),(n,o),(m)->(m,o)')
-
-        return vec_iterpolate_data(rho_super_arr, z_scale, pops_super_array, new_cmass_scale)
-
-    nx, ny, _, nlevels = lte_pops_list[0].shape
+    nx, ny, _, _ = lte_pops_list[0].shape
     k = nx * ny  # number of training/validation instances combined (helps control output file size)
     grid = nx + 2*pad  # accounts for expanding to include periodic BC's
     npad = ((pad,pad),(pad,pad),(0,0),(0,0))
@@ -159,16 +171,16 @@ def build_training_set(
         print(f'z shape {z_in.shape}')
         new_cmass_scale = np.logspace(-6, 2, ndep)
         temp = np.log10(temp_in)
-        vx = vx_in / 100
-        vy = vy_in / 100
-        vz_in = vy_in / 100
+        vx = vx_in / 100 # divide by 100 km/s
+        vy = vy_in / 100 # divide by 100 km/s
+        vz = vz_in / 100 # divide by 100 km/s
         ne = np.log10(ne_in)
         merged_input = np.stack(
             [
                 temp,
-                vx_in,
-                vy_in,
-                vz_in,
+                vx,
+                vy,
+                vz,
                 ne
             ],
             axis=-1
@@ -184,12 +196,6 @@ def build_training_set(
         merged_input = np.transpose(merged_input, (3,2,0,1))
         departure_coeff = np.transpose(departure_coeff, (3,2,0,1))
         print('Scaling data...')
-        mu_inp = merged_input.mean(axis=(1,2,3))[:, np.newaxis, np.newaxis, np.newaxis]
-        std_inp = merged_input.std(axis=(1,2,3))[:, np.newaxis, np.newaxis, np.newaxis]
-        mu_out = departure_coeff.mean(axis=(1,2,3))[:, np.newaxis, np.newaxis, np.newaxis]
-        std_out = departure_coeff.std(axis=(1,2,3))[:, np.newaxis, np.newaxis, np.newaxis]
-        merged_input = (merged_input - mu_inp)/std_inp
-        departure_coeff = (departure_coeff - mu_out)/std_out
         print(f"Splitting simulation into corresponding window / columns...")
         for i in range(pad, grid-pad):
             for j in range(pad, grid-pad):
@@ -208,6 +214,14 @@ def build_training_set(
     val_idx = np.setxor1d(tr_idx, idx)
     lte = np.array(lte_list)
     non_lte = np.array(non_lte_list)
+    lmean = lte.mean(axis=(0, 2, 3, 4), keepdims=True)
+    lstd  = lte.std(axis=(0, 2, 3, 4), keepdims=True)
+    l_norm = (lte - lmean) / lstd
+    nlmean = non_lte.mean(axis=(0, 2, 3, 4), keepdims=True)
+    nlstd  = non_lte.std(axis=(0, 2, 3, 4), keepdims=True)
+    nl_norm = (non_lte - nlmean) / nlstd
+    lte = l_norm
+    non_lte = nl_norm
     # split sets
     lte_train = lte[tr_idx]
     non_lte_train = non_lte[tr_idx]
@@ -220,21 +234,19 @@ def build_training_set(
     print(f'Saving into {save_path}...')
     with h5py.File(save_path, 'w') as f:
         dset1 = f.create_dataset("lte training windows", data=lte_train, dtype='f')
-        dset1.attrs["mu"] = mu_inp
-        dset1.attrs["std"] = std_inp
+        dset1.attrs["mu"] = lmean
+        dset1.attrs["std"] = lstd
         dset1.attrs["len"] = train_len
-        dset1.attrs["z"] = z_in
         dset2 = f.create_dataset("non lte training points", data=non_lte_train, dtype='f')
-        dset2.attrs["mu"] = mu_out
-        dset2.attrs["std"] = std_out
+        dset2.attrs["mu"] = nlmean
+        dset2.attrs["std"] = nlstd
         dset3 = f.create_dataset("lte test windows", data=lte_test, dtype='f')
-        dset3.attrs["mu"] = mu_inp
-        dset3.attrs["std"] = std_inp
+        dset3.attrs["mu"] = lmean
+        dset3.attrs["std"] = lstd
         dset3.attrs["len"] = test_len
-        dset3.attrs["z"] = z_in
         dset4 = f.create_dataset("non lte test points", data=non_lte_test, dtype='f')
-        dset4.attrs["mu"] = mu_out
-        dset4.attrs["std"] = std_out
+        dset4.attrs["mu"] = nlmean
+        dset4.attrs["std"] = nlstd
 
 
 def read_train_params(train_file):

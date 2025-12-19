@@ -58,9 +58,9 @@ for s in training_snapshots:
     rho_list.append(atmos.rho * 1e3)  #  g cm-3 to kg m-3
     z_scale_list.append(m3d.geometry.z * 1e-2)  # cm to m
     temp_list.append(atmos.temp)
-    vx_list.append(atmos.vx * 1e3) # km s-1 to m s-1
-    vy_list.append(atmos.vy * 1e3) # km s-1 to m s-1
-    vz_list.append(atmos.vz * 1e3) # km s-1 to m s-1
+    vx_list.append(atmos.vx) # km s-1
+    vy_list.append(atmos.vy) # km s-1
+    vz_list.append(atmos.vz ) # km s-1
     ne_list.append(atmos.ne * 1e6) #  cm-3 to m-3
     
 
@@ -83,13 +83,21 @@ pred_snap = 5
 m3d = Multi3dOut(directory=multi3d_path % pred_snap)
 m3d.readall()
 lte_pops = m3d.atom.nstar * 1e6
-nx, ny, nz, nlevel = lte_pops.shape
+nx, ny, nz, nlevel = m3d.atom.nstar.shape
 atmos = Multi3dAtmos(multi3d_atmos % pred_snap, nx, ny, nz)
-rho = atmos.rho
-rho_mean = np.mean(rho, axis=(0,1)) * 1e3
-z_scale = m3d.geometry.z * 1e-2
-SunnyNet.build_solving_set(lte_pops, rho_mean, z_scale, 
-                           save_path='3D_sim_predict_s%i.hdf5' % pred_snap, ndep=400, pad=1)
+rho = atmos.rho * 1e3  #  g cm-3 to kg m-3
+z_scale = m3d.geometry.z * 1e-2  # cm to m
+temp= atmos.temp
+vx = atmos.vx # km s-1
+vy = tmos.vy # km s-1
+vz = atmos.vz # km s-1
+ne = atmos.ne * 1e6 #  cm-3 to m-3
+SunnyNet.build_solving_set(
+    rho, z_scale, temp, vx,
+    vy, vz, ne,
+    save_path='3D_sim_predict_s%i.hdf5' % pred_snap,
+    ndep=400, pad=1
+)
 
 
 # 4. Predict populations
