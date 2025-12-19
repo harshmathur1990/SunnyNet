@@ -105,14 +105,14 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, alpha, verbose = True):
     # print(f"TOTAL {mode.upper()} LOSS = {epoch_loss:.8f}")
     # return epoch_loss
 
-    for i, instance in enumerate(
-        tqdm(
-            dataLoaders[mode],
-            desc=f"{mode.upper()} | Epoch {cur_epoch}",
-            leave=True,
-            ncols=100
-        )
-    ):
+    pbar = tqdm(
+        dataLoaders[mode],
+        desc=f"{mode.upper()} | Epoch {cur_epoch}",
+        leave=True,
+        ncols=100
+    )
+
+    for i, instance in enumerate(pbar):
     
         X = instance[0].to(model.device, non_blocking=True)   # LTE
         y_true = instance[1].to(model.device, non_blocking=True)  # non-LTE
@@ -137,11 +137,8 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, alpha, verbose = True):
 
         epoch_loss += batch_loss.item()
 
-        # tqdm live update
-        if verbose:
-            tqdm.write(
-                f"Epoch {cur_epoch} | Batch {i} | Loss: {batch_loss.item():.6e}"
-            )
+        # update tqdm postfix (clean, no extra lines)
+        pbar.set_postfix(loss=f"{epoch_loss / (i + 1):.3e}")
 
     epoch_loss /= len(dataLoaders[mode])
     print(f"TOTAL {mode.upper()} LOSS = {epoch_loss:.8f}")
