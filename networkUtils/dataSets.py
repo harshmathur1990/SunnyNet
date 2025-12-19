@@ -23,7 +23,6 @@ class PopulationDataset3d(Dataset):
             self.mu_inp = f[self.idx_0].attrs['mu']
             self.std_inp = f[self.idx_0].attrs['std']
             self.len = f[self.idx_0].attrs['len']
-            self.z = f[self.idx_0].attrs['z']
             
             self.mu_out = f[self.idx_1].attrs['mu']
             self.std_out = f[self.idx_1].attrs['std']
