@@ -1,6 +1,7 @@
 import os
 import torch
 import numpy as np
+from tqdm import tqdm
 
 def train(params, model, dataLoaders):
     '''
@@ -77,30 +78,73 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, alpha, verbose = True):
     if verbose:
         print('-'*10, f'Epoch {cur_epoch}: {mode}', '-'*10)
 
-    for i, instance in enumerate(dataLoaders[mode]):
-        X = instance[0].to(model.device, non_blocking=True) #lte
+    # for i, instance in enumerate(dataLoaders[mode]):
+    #     X = instance[0].to(model.device, non_blocking=True) #lte
         
-        y_true = instance[1].to(model.device, non_blocking=True) #non lte
+    #     y_true = instance[1].to(model.device, non_blocking=True) #non lte
 
-        #------------ FORWARD --------------#
+    #     #------------ FORWARD --------------#
+    #     y_pred = model.network(X)
+    #     batch_loss = model.loss_fxn(y_pred, y_true)
+
+    #     if alpha:                                       # conservation of mass
+    #         X_pop = ((10**X[...,k, k]).sum(1)).log10()   # sums across all levels (-1, 400)
+    #         y_pop = ((10**y_pred[...,0, 0]).sum(1)).log10()
+    #         batch_loss = alpha * torch.nn.MSELoss()(y_pop, X_pop) + (1 - alpha) * batch_loss #add conservation of mass loss to batchLoss
+            
+    #     #------------ BACKWARD ------------#
+    #     if mode == 'train':
+    #         model.optimizer.zero_grad()
+    #         batch_loss.backward(retain_graph=True)
+    #         model.optimizer.step()
+    #     epoch_loss += batch_loss.item()
+    #     if verbose:
+    #         if i%10 ==0:
+    #             print(f'Epoch {cur_epoch}- Batch {i} loss: {batch_loss.item()}')
+    # epoch_loss = epoch_loss / len(dataLoaders[mode])
+    # print(f"TOTAL {mode.upper()} LOSS = {epoch_loss:.8f}")
+    # return epoch_loss
+
+    for i, instance in enumerate(
+        tqdm(
+            dataLoaders[mode],
+            desc=f"{mode.upper()} | Epoch {cur_epoch}",
+            leave=True,
+            ncols=100
+        )
+    ):
+    
+        X = instance[0].to(model.device, non_blocking=True)   # LTE
+        y_true = instance[1].to(model.device, non_blocking=True)  # non-LTE
+
+        # ------------ FORWARD -------------- #
         y_pred = model.network(X)
         batch_loss = model.loss_fxn(y_pred, y_true)
 
-        if alpha:                                       # conservation of mass
-            X_pop = ((10**X[...,k, k]).sum(1)).log10()   # sums across all levels (-1, 400)
-            y_pop = ((10**y_pred[...,0, 0]).sum(1)).log10()
-            batch_loss = alpha * torch.nn.MSELoss()(y_pop, X_pop) + (1 - alpha) * batch_loss #add conservation of mass loss to batchLoss
-            
-        #------------ BACKWARD ------------#
+        if alpha:  # conservation of mass
+            X_pop = ((10 ** X[..., k, k]).sum(1)).log10()
+            y_pop = ((10 ** y_pred[..., 0, 0]).sum(1)).log10()
+            batch_loss = (
+                alpha * torch.nn.MSELoss()(y_pop, X_pop)
+                + (1 - alpha) * batch_loss
+            )
+
+        # ------------ BACKWARD ------------ #
         if mode == 'train':
             model.optimizer.zero_grad()
             batch_loss.backward(retain_graph=True)
             model.optimizer.step()
+
         epoch_loss += batch_loss.item()
+
+        # tqdm live update
         if verbose:
-            if i%10 ==0:
-                print(f'Epoch {cur_epoch}- Batch {i} loss: {batch_loss.item()}')
-    epoch_loss = epoch_loss / len(dataLoaders[mode])
+            tqdm.write(
+                f"Epoch {cur_epoch} | Batch {i} | Loss: {batch_loss.item():.6e}"
+            )
+
+    epoch_loss /= len(dataLoaders[mode])
     print(f"TOTAL {mode.upper()} LOSS = {epoch_loss:.8f}")
+
     return epoch_loss
 
