@@ -381,7 +381,6 @@ def sunnynet_train_model(train_path, save_folder, save_file, model_type='SunnyNe
     print(f"Using {params['model']} architecture...")
     print('Creating dataset...')
     tr_data = PopulationDataset3d(config['data_path'], train=True)
-    params['height_vector'] = tr_data.z
     val_data = PopulationDataset3d(config['data_path'], train=False)
     print('Creating data loaders...')
     loader_dict = {}
@@ -473,12 +472,10 @@ def sunnynet_predict_populations(model_path, train_path, test_path, save_path,
         'alpha': alpha,   # weight in loss calc. between mass conservation and cell by cell error
         'output_XY': nx,  # number of pixels in horizontal dimensions
     }
-    final, z, cmass_mean, cmass_scale = predict_populations(test_path, train_path, pred_config)
+    populations, cmass_scale = predict_populations(test_path, train_path, pred_config)
     print('Exponentiate')
-    final = 10**final
-    print(f'Atmos shape: {final.shape}')
+    populations = 10**populations
+    print(f'Atmos shape: {populations.shape}')
     with h5py.File(save_path, 'w') as f:
-        dset = f.create_dataset("populations", data = final, dtype='f')
-        dset.attrs['z'] = z
-        dset.attrs['cmass_mean'] = cmass_mean
+        dset = f.create_dataset("populations", data=populations, dtype='f')
         dset.attrs['cmass_scale'] = cmass_scale
