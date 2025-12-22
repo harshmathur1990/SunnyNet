@@ -89,7 +89,7 @@ rho = atmos.rho * 1e3  #  g cm-3 to kg m-3
 z_scale = m3d.geometry.z * 1e-2  # cm to m
 temp= atmos.temp
 vx = atmos.vx # km s-1
-vy = tmos.vy # km s-1
+vy = atmos.vy # km s-1
 vz = atmos.vz # km s-1
 ne = atmos.ne * 1e6 #  cm-3 to m-3
 SunnyNet.build_solving_set(

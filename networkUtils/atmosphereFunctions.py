@@ -61,13 +61,10 @@ def predict_populations(pop_path, train_data_path, config):
     
     with h5py.File(pop_path, 'r') as f:
         lte = f['lte test windows'][:]
-        cmass_mean = f['column mass'][:]
-        cmass_scale = f['column scale'][:]
         
     lte = (lte-mu_inp)/std_inp
-    non_lte = numpy.zeros_like(lte)  # placeholder only
     
-    data = [list(a) for a in zip(lte,non_lte)]
+    data = [list(a) for a in lte]
     
     mu_out = torch.tensor(mu_out).to(model.device, torch.float)
     std_out = torch.tensor(std_out).to(model.device, torch.float)
@@ -78,19 +75,19 @@ def predict_populations(pop_path, train_data_path, config):
     for point in loader:
         with torch.no_grad():
             model.network.eval()
-            X = point[0].to(model.device, torch.float, non_blocking=True) # lte
+            X = point.to(model.device, torch.float, non_blocking=True)
             y_pred = model.network(X)
             y_pred = y_pred * std_out + mu_out
-            pred_list.append(y_pred)           
+            pred_list.append(y_pred)
     
     print(f'Fixing up dimensions...')
-    pred_list = torch.cat(pred_list, dim = 0)   
+    pred_list = torch.cat(pred_list, dim = 0)
     pred_final = pred_list.squeeze(3).squeeze(3).detach().cpu().numpy()
     pred_final = numpy.transpose(pred_final,(0,2,1))
 
     dim = config['output_XY']
     dimz = config['features']
-    dimc = config['channels']
+    dimc = config['out_channels']
     pred_final = pred_final.reshape((dim, dim, dimz, dimc))
     
-    return pred_final, z, cmass_mean, cmass_scale
+    return pred_final, cmass_scale

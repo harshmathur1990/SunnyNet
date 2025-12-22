@@ -2,6 +2,7 @@ import h5py
 import torch
 from torch.utils.data import Dataset
 
+
 class PopulationDataset3d(Dataset):
     '''
     Dataset wrapper for our [c,z,x,y] shaped input data
@@ -35,4 +36,4 @@ class PopulationDataset3d(Dataset):
             lte = f[self.idx_0][idx,...]
             n_lte = f[self.idx_1][idx,...]
             
-        return lte, n_lte # lte -> X, n_lte -> y_hat 
+        return lte, n_lte
