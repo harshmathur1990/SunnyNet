@@ -273,13 +273,12 @@ def read_solve_params(solve_file):
     """
     tmp = h5py.File(solve_file, 'r')
     in_buf = tmp['lte test windows'].shape
-    out_buf = tmp['non lte test points'].shape
     nx = int(np.sqrt(in_buf[0]))
     in_channels = in_buf[1]
-    out_channels = out_buf[1]
+    out_channels = 6
     ndep = in_buf[2]
     pad = (in_buf[-1] - 1) // 2
-    return nx, in_channels, out_channels, ndep, pad
+    return nx, in_channels, ndep, pad
     
 
 def check_model_compat(model_type, pad):
@@ -449,9 +448,8 @@ def sunnynet_predict_populations(model_path, train_path, test_path, save_path,
         cell error. Default is 0.2. To switch off entirely set to None.
     """
     _, _, in_channels, out_channels, ndep, pad = read_train_params(train_path)
-    nx, in_channels1, out_channels1, ndep1, npad1 = read_solve_params(test_path)
+    nx, in_channels1, ndep1, npad1 = read_solve_params(test_path)
     assert in_channels == in_channels1, "Inconsistent number of input channels between train and test data"
-    assert out_channels1 == out_channels1, "Inconsistent number of output channels between train and test data"
     assert ndep == ndep1, "Inconsistent number of depth points between train and test data"
     assert pad == npad1, "Inconsistent padding number between train and test data"
     if not check_model_compat(model_type, pad):
