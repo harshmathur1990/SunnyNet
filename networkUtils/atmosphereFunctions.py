@@ -92,4 +92,4 @@ def predict_populations(pop_path, train_data_path, config):
     dimc = config['out_channels']
     pred_final = pred_final.reshape((dim, dim, dimz, dimc))
     
-    return pred_final, cmass_scale
+    return pred_final

@@ -470,7 +470,8 @@ def sunnynet_predict_populations(model_path, train_path, test_path, save_path,
         'alpha': alpha,   # weight in loss calc. between mass conservation and cell by cell error
         'output_XY': nx,  # number of pixels in horizontal dimensions
     }
-    populations, cmass_scale = predict_populations(test_path, train_path, pred_config)
+    populations = predict_populations(test_path, train_path, pred_config)
+    new_cmass_scale = np.logspace(-6, 2, 400)
     print('Exponentiate')
     populations = 10**populations
     print(f'Atmos shape: {populations.shape}')
