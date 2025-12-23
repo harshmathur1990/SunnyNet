@@ -63,10 +63,10 @@ def predict_populations(pop_path, train_data_path, config):
         lte = f['lte test windows'][:]
         
     lte = (lte-mu_inp)/std_inp
+
+    non_lte = numpy.zeros_like(lte)  # placeholder only
     
-    data = [list(a) for a in lte]
-    
-    data = torch.as_tensor(data, dtype=torch.float32)
+    data = [list(a) for a in zip(lte,non_lte)]
 
     mu_out = torch.tensor(mu_out).to(model.device, torch.float)
     std_out = torch.tensor(std_out).to(model.device, torch.float)
@@ -77,7 +77,7 @@ def predict_populations(pop_path, train_data_path, config):
     for point in loader:
         with torch.no_grad():
             model.network.eval()
-            X = point.to(model.device, torch.float, non_blocking=True)
+            X = point[0].to(model.device, torch.float, non_blocking=True)
             y_pred = model.network(X)
             y_pred = y_pred * std_out + mu_out
             pred_list.append(y_pred)
