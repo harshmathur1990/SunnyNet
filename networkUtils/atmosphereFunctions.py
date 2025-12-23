@@ -66,6 +66,8 @@ def predict_populations(pop_path, train_data_path, config):
     
     data = [list(a) for a in lte]
     
+    data = torch.as_tensor(data, dtype=torch.float32)
+
     mu_out = torch.tensor(mu_out).to(model.device, torch.float)
     std_out = torch.tensor(std_out).to(model.device, torch.float)
     
