@@ -477,4 +477,4 @@ def sunnynet_predict_populations(model_path, train_path, test_path, save_path,
     print(f'Atmos shape: {populations.shape}')
     with h5py.File(save_path, 'w') as f:
         dset = f.create_dataset("populations", data=populations, dtype='f')
-        dset.attrs['cmass_scale'] = cmass_scale
+        dset.attrs['cmass_scale'] = new_cmass_scale
