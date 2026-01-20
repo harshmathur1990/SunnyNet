@@ -25,7 +25,6 @@ def predict_populations(pop_path, train_data_path, config):
         'mode': (str),                 # either 'testing' or 'training', going to be testing for this
         'multi_gpu_train': (bool),     # whether the model was traine on multiple GPUs or just 1
         'loss_fxn': (str),             # one of the loss functions from torch.nn
-        'alpha': (float) or (None),    # weight of conservation of mass term in loss function
         'output_XY': (int),            # X/Y size of output populations
     }
     '''

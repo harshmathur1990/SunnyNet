@@ -75,7 +75,7 @@ SunnyNet.build_training_set(
 
 # 2. Train network
 SunnyNet.sunnynet_train_model('3D_sim_train_s123.hdf5', 'training/', 
-                              '3D_sim_train_s123.pt', model_type='SunnyNet_3x3',alpha=0.2, cuda=True)
+                              '3D_sim_train_s123.pt', model_type='SunnyNet_3x3', cuda=True)
 
 
 # 3. Prepare data for predicting

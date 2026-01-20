@@ -299,7 +299,7 @@ def check_model_compat(model_type, pad):
 
 
 def sunnynet_train_model(train_path, save_folder, save_file, model_type='SunnyNet_3x3',
-                         loss_function='MSELoss', alpha=1e-3, cuda=True):
+                         loss_function='MSELoss', cuda=True):
     """
     Trains a SunnyNet neural network model to be used to predict non-LTE populations.
     Needs a "train" file prepared with build_training_set(). Common options can
@@ -329,7 +329,6 @@ def sunnynet_train_model(train_path, save_folder, save_file, model_type='SunnyNe
         Type of loss function to use. Could be a class name of pytorch
         loss functions (e.g. 'MSELoss', the default), or a class name 
         from networkUtils/lossFunctions.py. 
-    alpha : float or None, optional
         Weight in loss calculation between mass conservation and cell by
         cell error. Default is 0.2. To switch off entirely set to None.
     cuda : bool, optional
@@ -368,7 +367,6 @@ def sunnynet_train_model(train_path, save_folder, save_file, model_type='SunnyNe
         'val_size': test_size,    # manually calculate from your train / test split
         'batch_size_val': 128,
         'num_workers': 64,   # CPU threads
-        'alpha': alpha    # weight in loss calc. between mass conservation and cell by cell error
     }
     print('Python VERSION:', sys.version)
     print('pyTorch VERSION:', torch.__version__)
@@ -406,8 +404,7 @@ def sunnynet_train_model(train_path, save_folder, save_file, model_type='SunnyNe
 
 
 def sunnynet_predict_populations(model_path, train_path, test_path, save_path, 
-                                 cuda=True, model_type='SunnyNet_3x3', loss_function='MSELoss',
-                                 alpha=1e-3):
+                                 cuda=True, model_type='SunnyNet_3x3', loss_function='MSELoss'):
     """
     Predicts non-LTE populations using SunnyNet, using an existing trained set,
     model data, and input LTE populations pre-prepared with build_solving_set()
@@ -443,7 +440,6 @@ def sunnynet_predict_populations(model_path, train_path, test_path, save_path,
         Type of loss function to use. Could be a class name of pytorch
         loss functions (e.g. 'MSELoss', the default), or a class name 
         from networkUtils/lossFunctions.py. 
-    alpha : float or None, optional
         Weight in loss calculation between mass conservation and cell by
         cell error. Default is 0.2. To switch off entirely set to None.
     """
@@ -467,7 +463,6 @@ def sunnynet_predict_populations(model_path, train_path, test_path, save_path,
         'mode': 'testing',
         'multi_gpu_train': False,
         'loss_fxn': loss_function,
-        'alpha': alpha,   # weight in loss calc. between mass conservation and cell by cell error
         'output_XY': nx,  # number of pixels in horizontal dimensions
     }
     populations = predict_populations(test_path, train_path, pred_config)

@@ -21,7 +21,6 @@ def train(params, model, dataLoaders):
         'val_size': (int),         # size of validation set 
         'batch_size_val': (int)    # validation batch size
         'num_workers': (int)       # CPU threads to use
-        'alpha': (float) / None    # how to weight conservation of mass with normal loss
     }
     '''
     full_path = os.path.join(params['save_folder'], params['model_save'])
@@ -33,12 +32,12 @@ def train(params, model, dataLoaders):
     for epoch in range(params['num_epochs']):
         ## train forwards ##
         model.network.train()
-        tr_loss = run_epoch('train', model, epoch, dataLoaders, params['alpha'])
+        tr_loss = run_epoch('train', model, epoch, dataLoaders)
         loss_dict['train'].append(tr_loss)
         ## eval forward ##
         with torch.no_grad():
             model.network.eval()
-            val_loss = run_epoch('val', model, epoch, dataLoaders, params['alpha'])
+            val_loss = run_epoch('val', model, epoch, dataLoaders)
             loss_dict['val'].append(val_loss)
         
         ## check los ##
@@ -57,7 +56,7 @@ def train(params, model, dataLoaders):
             
     return loss_dict
     
-def run_epoch(mode, model, cur_epoch, dataLoaders, alpha, verbose = True):
+def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
     '''
     Runs epoch given the params in train()
     '''
@@ -78,33 +77,6 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, alpha, verbose = True):
     if verbose:
         print('-'*10, f'Epoch {cur_epoch}: {mode}', '-'*10)
 
-    # for i, instance in enumerate(dataLoaders[mode]):
-    #     X = instance[0].to(model.device, non_blocking=True) #lte
-        
-    #     y_true = instance[1].to(model.device, non_blocking=True) #non lte
-
-    #     #------------ FORWARD --------------#
-    #     y_pred = model.network(X)
-    #     batch_loss = model.loss_fxn(y_pred, y_true)
-
-    #     if alpha:                                       # conservation of mass
-    #         X_pop = ((10**X[...,k, k]).sum(1)).log10()   # sums across all levels (-1, 400)
-    #         y_pop = ((10**y_pred[...,0, 0]).sum(1)).log10()
-    #         batch_loss = alpha * torch.nn.MSELoss()(y_pop, X_pop) + (1 - alpha) * batch_loss #add conservation of mass loss to batchLoss
-            
-    #     #------------ BACKWARD ------------#
-    #     if mode == 'train':
-    #         model.optimizer.zero_grad()
-    #         batch_loss.backward(retain_graph=True)
-    #         model.optimizer.step()
-    #     epoch_loss += batch_loss.item()
-    #     if verbose:
-    #         if i%10 ==0:
-    #             print(f'Epoch {cur_epoch}- Batch {i} loss: {batch_loss.item()}')
-    # epoch_loss = epoch_loss / len(dataLoaders[mode])
-    # print(f"TOTAL {mode.upper()} LOSS = {epoch_loss:.8f}")
-    # return epoch_loss
-
     pbar = tqdm(
         dataLoaders[mode],
         desc=f"{mode.upper()} | Epoch {cur_epoch}",
@@ -120,14 +92,6 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, alpha, verbose = True):
         # ------------ FORWARD -------------- #
         y_pred = model.network(X)
         batch_loss = model.loss_fxn(y_pred, y_true)
-
-        if alpha:  # conservation of mass
-            X_pop = ((10 ** X[..., k, k]).sum(1)).log10()
-            y_pop = ((10 ** y_pred[..., 0, 0]).sum(1)).log10()
-            batch_loss = (
-                alpha * torch.nn.MSELoss()(y_pop, X_pop)
-                + (1 - alpha) * batch_loss
-            )
 
         # ------------ BACKWARD ------------ #
         if mode == 'train':
