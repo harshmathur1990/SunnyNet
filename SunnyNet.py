@@ -450,7 +450,7 @@ def sunnynet_predict_populations(model_path, train_path, test_path, save_path,
     assert pad == npad1, "Inconsistent padding number between train and test data"
     if not check_model_compat(model_type, pad):
         raise ValueError(f"Incompatible sizes between model {model_type} "
-                         f"and training set (pad={pad}, channels={channels})")    
+                         f"and training set (pad={pad})")    
     if os.path.isfile(save_path):
         raise IOError("Output file already exists. Refusing to overwrite.")
     pred_config = {
