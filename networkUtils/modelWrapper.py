@@ -184,7 +184,7 @@ class Model():
             elif params['loss_fxn'] == 'MSELoss':
                 self.loss_fxn = nn.MSELoss()
             else:
-                raise Exception("!!Invalid loss function!!")       
+                raise Exception("!!Invalid loss function: {}!!".format(params['loss_fxn']))       
         else:
             raise Exception("!! Invalid model mode")
         
