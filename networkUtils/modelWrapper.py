@@ -178,9 +178,9 @@ class Model():
             
             ## set loss function ##
             if params['loss_fxn'] == 'WeightedMSE':
-                self.loss_fxn = WeightedMSE(params['height_vector'], params['in_channels'], params['out_channels'], 
-                                            params['features'], params['loss_w_range'], 
-                                            params['loss_scale'], self.device)
+                self.loss_fxn = WeightedMSE()
+            elif params['loss_fxn'] == 'RelativeMSE':
+                self.loss_fxn = RelativeMSE()
             elif params['loss_fxn'] == 'MSELoss':
                 self.loss_fxn = nn.MSELoss()
             else:

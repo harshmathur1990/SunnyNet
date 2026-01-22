@@ -112,45 +112,6 @@ def build_training_set(
     save_path="example.hdf5", ndep=400,
     pad=1, tr_percent=85
 ):
-    """
-    Prepares populations from 3D simulation into a file to be fed into a network
-    for training and validation.
-
-    Parameters
-    ----------
-    lte_pops : list or array_like
-        List of 4D arrays with LTE populations to use for training. Each item
-        in list could be populations from a different snapshot and/or simulation.
-        List should have at least one element. The shape of each array should be
-        (nx, ny, nz, nlevels), units in m^-3.
-    nlte_pops : list or array_like
-        List of 4D arrays with LTE populations to use for training. Same shape
-        and units as lte_pops.
-    rho_mean : list or array_like
-        List with 1D arrays of spatially averaged mass density. Each item
-        in list could be average density from a different snapshot and/or simulation.
-        List should have at least one element. The shape of each array should be
-        (nz,), units in kg m^-3.
-    z_scale : list or array like.
-        List with 1D arrays of height. Each item in list could be height from a 
-        different snapshot and/or simulation. List should have at least one element.
-        The shape of each array should be (nz,), units in m. First point 
-        should be top of atmosphere.
-    save_path : str
-        Name of file where the output will be written to.
-    ndep : int, optional
-        Number of output height points, to which the populations will be 
-        interpolated on a mean column mass scale. Does not need to be the
-        same as the input nz. Default is 400.
-    pad : int, optional
-        How many pixels to pad the each population column of interest in the
-        x and y dimensions. Should be consistent with the window size:
-        window size is 1 + 2*pad, so use pad=0 for 1x1, pad=1 for 3x3, 
-        and so on. Default is 1.
-    tr_percent : int, optional
-        Percent of data to be used as a training set (the rest will be used
-        for validation).
-    """
 
     nx, ny, _, _ = lte_pops_list[0].shape
     k = nx * ny  # number of training/validation instances combined (helps control output file size)
@@ -450,7 +411,7 @@ def sunnynet_predict_populations(model_path, train_path, test_path, save_path,
     assert pad == npad1, "Inconsistent padding number between train and test data"
     if not check_model_compat(model_type, pad):
         raise ValueError(f"Incompatible sizes between model {model_type} "
-                         f"and training set (pad={pad})")    
+                         f"and training set (pad={pad})")
     if os.path.isfile(save_path):
         raise IOError("Output file already exists. Refusing to overwrite.")
     pred_config = {

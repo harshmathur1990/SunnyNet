@@ -4,25 +4,6 @@ import numpy as np
 from tqdm import tqdm
 
 def train(params, model, dataLoaders):
-    '''
-    trains a given model
-    
-    model: Pytorch nn.Module instance
-    dataLoaders = {'train': nn.DataLoader, 'val': nn.DataLoader} dataloaders for training and validation set
-    
-        params = {
-        'data_path': (str),        # path to training data file from 1_build_training_set_multi_sim.py
-        'save_folder': (str)       # path to model save folder
-        'model_save': (str)        # model_name.pt   
-        'early_stopping': (int),   # early stop tolerance
-        'num_epochs': (int),       # epochs     
-        'train_size': (int),       # size of training set
-        'batch_size_train': (int), # training batch size
-        'val_size': (int),         # size of validation set 
-        'batch_size_val': (int)    # validation batch size
-        'num_workers': (int)       # CPU threads to use
-    }
-    '''
     full_path = os.path.join(params['save_folder'], params['model_save'])
     loss_dict = {'train':[], 'val':[]}
     no_improv = 0
