@@ -88,8 +88,8 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
         # ------------ FORWARD -------------- #
         y_pred = model.network(X)
         if model.complex_loss is True:
-            batch_loss = self.loss_fxn1(y_pred, y_true)
-            batch_loss += self.loss_fxn2(y_pred, extract_temperature(X))
+            batch_loss = model.loss_fxn1(y_pred, y_true)
+            batch_loss += model.loss_fxn2(y_pred, extract_temperature(X))
         else:
             batch_loss = model.loss_fxn(y_pred, y_true)
 
