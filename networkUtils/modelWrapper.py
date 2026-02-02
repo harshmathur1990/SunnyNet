@@ -100,6 +100,7 @@ class Model():
             ## send to CPU/GPU ##
             self.network.to(self.device)
 
+            self.complex_loss = False
             ## set loss function ##
             if params['loss_fxn'] == 'WeightedMSE':
                 self.loss_fxn = WeightedMSE()
@@ -107,6 +108,14 @@ class Model():
                 self.loss_fxn = RelativeMSE()
             elif params['loss_fxn'] == 'MSELoss':
                 self.loss_fxn = nn.MSELoss()
+            elif params['loss_fxn'] == 'PhysicsLoss':
+                self.complex_loss = True
+                self.loss_fxn1 = WeightedMSE()
+                self.loss_fxn2 = PhysicsLossAllLines(
+                    lines=lines,
+                    chi=chi,
+                    g=g,
+                )
             else:
                 raise Exception("!!Invalid loss function: {}!!".format(params['loss_fxn']))   
 
@@ -176,6 +185,7 @@ class Model():
             else:
                 self.device = "cpu"
             
+            self.complex_loss = False
             ## set loss function ##
             if params['loss_fxn'] == 'WeightedMSE':
                 self.loss_fxn = WeightedMSE()
@@ -183,6 +193,14 @@ class Model():
                 self.loss_fxn = RelativeMSE()
             elif params['loss_fxn'] == 'MSELoss':
                 self.loss_fxn = nn.MSELoss()
+            elif params['loss_fxn'] == 'PhysicsLoss':
+                self.complex_loss = True
+                self.loss_fxn1 = WeightedMSE()
+                self.loss_fxn2 = PhysicsLossAllLines(
+                    lines=lines,
+                    chi=chi,
+                    g=g,
+                )
             else:
                 raise Exception("!!Invalid loss function: {}!!".format(params['loss_fxn']))       
         else:

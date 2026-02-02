@@ -36,7 +36,22 @@ def train(params, model, dataLoaders):
             break
             
     return loss_dict
-    
+
+
+def extract_temperature(X):
+    """
+    X: (B, 5, Nz, k, k)
+    returns T: (B, Nz)
+    """
+    k = X.shape[-1]
+    center = k // 2
+
+    logT = X[:, 0, :, center, center]   # (B, Nz)
+    T = 10.0 ** logT                    # convert log10(T) → T
+
+    return T
+
+
 def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
     '''
     Runs epoch given the params in train()
@@ -72,7 +87,11 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
 
         # ------------ FORWARD -------------- #
         y_pred = model.network(X)
-        batch_loss = model.loss_fxn(y_pred, y_true)
+        if model.complex_loss is True:
+            batch_loss = self.loss_fxn1(y_pred, y_true)
+            batch_loss += self.loss_fxn2(y_pred, extract_temperature(X))
+        else:
+            batch_loss = model.loss_fxn(y_pred, y_true)
 
         # ------------ BACKWARD ------------ #
         if mode == 'train':
