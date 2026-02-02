@@ -78,6 +78,12 @@ class PhysicsLossAllLines(nn.Module):
         logb_pred : (B, Nlevels, Nz)
         T         : (B, Nz)
         """
+        if logb_pred.ndim == 5:
+            logb_pred = logb_pred.squeeze(-1).squeeze(-1)
+
+        assert logb_pred.ndim == 3   # passes
+        assert T.ndim == 2           # passes
+
         L_curv = 0.0
         L_bar  = 0.0
 
