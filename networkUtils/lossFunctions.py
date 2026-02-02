@@ -70,8 +70,8 @@ class PhysicsLossAllLines(nn.Module):
         self.kB = kB
 
         # Register atomic constants as buffers (not parameters)
-        self.register_buffer("chi", torch.tensor(chi, dtype=torch.float64))
-        self.register_buffer("g",   torch.tensor(g,   dtype=torch.float64))
+        self.register_buffer("chi", torch.tensor(chi, dtype=torch.float32))
+        self.register_buffer("g",   torch.tensor(g,   dtype=torch.float32))
 
     def forward(self, logb_pred, T):
         """
