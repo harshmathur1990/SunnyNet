@@ -78,36 +78,56 @@ class PhysicsLossAllLines(nn.Module):
         logb_pred : (B, Nlevels, Nz)
         T         : (B, Nz)
         """
+        def _check(name, t):
+            if not torch.isfinite(t).all():
+                bad = (~torch.isfinite(t)).nonzero(as_tuple=False)
+                print(f"[NON-FINITE] {name}: shape={tuple(t.shape)} dtype={t.dtype} device={t.device}")
+                print(f"{name} min/max:", t[torch.isfinite(t)].min().item(), t[torch.isfinite(t)].max().item())
+                print("First bad index:", bad[0].tolist())
+                raise RuntimeError(f"{name} became NaN/Inf")
+
         if logb_pred.ndim == 5:
             logb_pred = logb_pred.squeeze(-1).squeeze(-1)
 
         assert logb_pred.ndim == 3   # passes
         assert T.ndim == 2           # passes
 
+        # At top, after squeeze:
+        _check("logb_pred", logb_pred)
+        _check("T", T)
+
         L_curv = 0.0
         L_bar  = 0.0
 
         for (l, u) in self.lines:
             # q(z) = log(b_l / b_u)
-            q = logb_pred[:, l, :] - logb_pred[:, u, :]   # (B, Nz)
+            q = logb_pred[:, l, :] - logb_pred[:, u, :]
+            _check("q", q)
 
-            # ---- curvature penalty
+            # curvature penalty
             d2q = q[:, 2:] - 2.0 * q[:, 1:-1] + q[:, :-2]
             L_curv += (d2q ** 2).mean()
 
-            # ---- LTE ratio from temperature
-            dE = self.chi[u] - self.chi[l]   # scalar tensor
+            # LTE ratio term
+            dE = self.chi[u] - self.chi[l]
             log_nl_over_nu_LTE = (
                 dE / (self.kB * T) + torch.log(self.g[l] / self.g[u])
             )
+            _check("log_nl_over_nu_LTE", log_nl_over_nu_LTE)
 
             logR = q + log_nl_over_nu_LTE
-            R = torch.exp(logR)
+            _check("logR", logR)
 
-            # ---- barrier near R → 1
-            L_bar += (
+            R = torch.exp(logR)
+            _check("R", R)
+
+            # ---- barrier contribution (THIS is the new diagnostic)
+            barrier_term = (
                 F.softplus(self.kappa * (self.eps - (R - 1.0))) / self.kappa
-            ).mean()
+            )
+            _check("barrier_term", barrier_term)
+
+            L_bar += barrier_term.mean()
 
         nlines = len(self.lines)
         L_curv /= nlines
