@@ -93,8 +93,8 @@ class PhysicsLossAllLines(nn.Module):
         assert T.ndim == 2           # passes
 
         # At top, after squeeze:
-        _check("logb_pred", logb_pred)
-        _check("T", T)
+        # _check("logb_pred", logb_pred)
+        # _check("T", T)
 
         L_curv = 0.0
         L_bar  = 0.0
@@ -102,7 +102,7 @@ class PhysicsLossAllLines(nn.Module):
         for (l, u) in self.lines:
             # q(z) = log(b_l / b_u)
             q = logb_pred[:, l, :] - logb_pred[:, u, :]
-            _check("q", q)
+            # _check("q", q)
 
             # curvature penalty
             d2q = q[:, 2:] - 2.0 * q[:, 1:-1] + q[:, :-2]
@@ -113,19 +113,19 @@ class PhysicsLossAllLines(nn.Module):
             log_nl_over_nu_LTE = (
                 dE / (self.kB * T) + torch.log(self.g[l] / self.g[u])
             )
-            _check("log_nl_over_nu_LTE", log_nl_over_nu_LTE)
+            # _check("log_nl_over_nu_LTE", log_nl_over_nu_LTE)
 
             logR = q + log_nl_over_nu_LTE
-            _check("logR", logR)
+            # _check("logR", logR)
 
             R = torch.exp(logR)
-            _check("R", R)
+            # _check("R", R)
 
             # ---- barrier contribution (THIS is the new diagnostic)
             barrier_term = (
                 F.softplus(self.kappa * (self.eps - (R - 1.0))) / self.kappa
             )
-            _check("barrier_term", barrier_term)
+            # _check("barrier_term", barrier_term)
 
             L_bar += barrier_term.mean()
 
