@@ -175,18 +175,18 @@ def build_training_set(
     val_idx = np.setxor1d(tr_idx, idx)
     lte = np.array(lte_list)
     non_lte = np.array(non_lte_list)
-    lmean = lte.mean(axis=(0, 2, 3, 4), keepdims=True)
-    lstd  = lte.std(axis=(0, 2, 3, 4), keepdims=True)
-    l_norm = (lte - lmean) / lstd
-    nlmean = non_lte.mean(axis=(0, 2, 3, 4), keepdims=True)
-    nlstd  = non_lte.std(axis=(0, 2, 3, 4), keepdims=True)
-    nlmean[:] = 0
-    nlstd[:] = 1
-    lmean[:] = 0
-    lstd[:] = 1
-    nl_norm = (non_lte - nlmean) / nlstd
-    lte = l_norm
-    non_lte = nl_norm
+    # lmean = lte.mean(axis=(0, 2, 3, 4), keepdims=True)
+    # lstd  = lte.std(axis=(0, 2, 3, 4), keepdims=True)
+    # l_norm = (lte - lmean) / lstd
+    # nlmean = non_lte.mean(axis=(0, 2, 3, 4), keepdims=True)
+    # nlstd  = non_lte.std(axis=(0, 2, 3, 4), keepdims=True)
+    # nlmean[:] = 0
+    # nlstd[:] = 1
+    # lmean[:] = 0
+    # lstd[:] = 1
+    # nl_norm = (non_lte - nlmean) / nlstd
+    # lte = l_norm
+    # non_lte = nl_norm
     # split sets
     lte_train = lte[tr_idx]
     non_lte_train = non_lte[tr_idx]
