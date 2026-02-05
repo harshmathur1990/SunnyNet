@@ -91,18 +91,18 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
             T = extract_temperature(X)
 
             # Squeeze only for physics loss if you kept it inside PhysicsLossAllLines; otherwise do it here.
-            print("y_pred:", y_pred.shape, y_pred.dtype, y_pred.device)
-            print("y_true:", y_true.shape, y_true.dtype, y_true.device)
-            print("T:", T.shape, T.dtype, T.device)
+            # print("y_pred:", y_pred.shape, y_pred.dtype, y_pred.device)
+            # print("y_true:", y_true.shape, y_true.dtype, y_true.device)
+            # print("T:", T.shape, T.dtype, T.device)
 
-            if not torch.isfinite(y_pred).all():
-                raise RuntimeError("y_pred has NaN/Inf")
-            if not torch.isfinite(y_true).all():
-                raise RuntimeError("y_true has NaN/Inf")
-            if not torch.isfinite(T).all():
-                raise RuntimeError("T has NaN/Inf")
+            # if not torch.isfinite(y_pred).all():
+            #     raise RuntimeError("y_pred has NaN/Inf")
+            # if not torch.isfinite(y_true).all():
+            #     raise RuntimeError("y_true has NaN/Inf")
+            # if not torch.isfinite(T).all():
+            #     raise RuntimeError("T has NaN/Inf")
 
-            print("T min/max:", T.min().item(), T.max().item())
+            # print("T min/max:", T.min().item(), T.max().item())
             
             batch_loss = model.loss_fxn1(y_pred, y_true)
             batch_loss += model.loss_fxn2(y_pred, T)
