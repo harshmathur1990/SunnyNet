@@ -182,6 +182,8 @@ def build_training_set(
     nlstd  = non_lte.std(axis=(0, 2, 3, 4), keepdims=True)
     nlmean[:] = 0
     nlstd[:] = 1
+    lmean[:] = 0
+    lstd[:] = 1
     nl_norm = (non_lte - nlmean) / nlstd
     lte = l_norm
     non_lte = nl_norm
