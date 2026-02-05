@@ -70,6 +70,9 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
         raise AttributeError('Currently only support models with square X/Y input dimmensions of: 1, 3, 5, 7')
            
     epoch_loss = 0
+    loss1_running = 0.0
+    loss2_running = 0.0
+
     if verbose:
         print('-'*10, f'Epoch {cur_epoch}: {mode}', '-'*10)
 
@@ -89,23 +92,15 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
         y_pred = model.network(X)
         if model.complex_loss is True:
             T = extract_temperature(X)
-
-            # Squeeze only for physics loss if you kept it inside PhysicsLossAllLines; otherwise do it here.
-            # print("y_pred:", y_pred.shape, y_pred.dtype, y_pred.device)
-            # print("y_true:", y_true.shape, y_true.dtype, y_true.device)
-            # print("T:", T.shape, T.dtype, T.device)
-
-            # if not torch.isfinite(y_pred).all():
-            #     raise RuntimeError("y_pred has NaN/Inf")
-            # if not torch.isfinite(y_true).all():
-            #     raise RuntimeError("y_true has NaN/Inf")
-            # if not torch.isfinite(T).all():
-            #     raise RuntimeError("T has NaN/Inf")
-
-            # print("T min/max:", T.min().item(), T.max().item())
             
-            batch_loss = model.loss_fxn1(y_pred, y_true)
-            batch_loss += model.loss_fxn2(y_pred, T)
+            loss_1 = model.loss_fxn1(y_pred, y_true)
+            loss_2 = model.loss_fxn2(y_pred, T)
+
+            batch_loss = loss_1 + loss_2
+
+            loss1_running += loss_1.item()
+            loss2_running += loss_2.item()
+
         else:
             batch_loss = model.loss_fxn(y_pred, y_true)
 
@@ -118,7 +113,14 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
         epoch_loss += batch_loss.item()
 
         # update tqdm postfix (clean, no extra lines)
-        pbar.set_postfix(loss=f"{epoch_loss / (i + 1):.3e}")
+        if model.complex_loss is True:
+            pbar.set_postfix({
+                "L": f"{epoch_loss / (i + 1):.3e}",
+                "L1": f"{loss1_running / (i + 1):.3e}",
+                "L2": f"{loss2_running / (i + 1):.3e}",
+            })
+        else:
+            pbar.set_postfix(loss=f"{epoch_loss / (i + 1):.3e}")
 
     epoch_loss /= len(dataLoaders[mode])
     print(f"TOTAL {mode.upper()} LOSS = {epoch_loss:.8f}")
