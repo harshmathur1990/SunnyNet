@@ -175,19 +175,6 @@ def build_training_set(
     val_idx = np.setxor1d(tr_idx, idx)
     lte = np.array(lte_list)
     non_lte = np.array(non_lte_list)
-    # lmean = lte.mean(axis=(0, 2, 3, 4), keepdims=True)
-    # lstd  = lte.std(axis=(0, 2, 3, 4), keepdims=True)
-    # l_norm = (lte - lmean) / lstd
-    # nlmean = non_lte.mean(axis=(0, 2, 3, 4), keepdims=True)
-    # nlstd  = non_lte.std(axis=(0, 2, 3, 4), keepdims=True)
-    # nlmean[:] = 0
-    # nlstd[:] = 1
-    # lmean[:] = 0
-    # lstd[:] = 1
-    # nl_norm = (non_lte - nlmean) / nlstd
-    # lte = l_norm
-    # non_lte = nl_norm
-    # split sets
     lte_train = lte[tr_idx]
     non_lte_train = non_lte[tr_idx]
     train_len = len(lte_train)
@@ -199,19 +186,11 @@ def build_training_set(
     print(f'Saving into {save_path}...')
     with h5py.File(save_path, 'w') as f:
         dset1 = f.create_dataset("lte training windows", data=lte_train, dtype='f')
-        # dset1.attrs["mu"] = lmean
-        # dset1.attrs["std"] = lstd
         dset1.attrs["len"] = train_len
         dset2 = f.create_dataset("non lte training points", data=non_lte_train, dtype='f')
-        # dset2.attrs["mu"] = nlmean
-        # dset2.attrs["std"] = nlstd
         dset3 = f.create_dataset("lte test windows", data=lte_test, dtype='f')
-        # dset3.attrs["mu"] = lmean
-        # dset3.attrs["std"] = lstd
         dset3.attrs["len"] = test_len
         dset4 = f.create_dataset("non lte test points", data=non_lte_test, dtype='f')
-        # dset4.attrs["mu"] = nlmean
-        # dset4.attrs["std"] = nlstd
 
 
 def read_train_params(train_file):

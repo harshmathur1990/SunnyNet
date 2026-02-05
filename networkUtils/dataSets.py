@@ -21,12 +21,7 @@ class PopulationDataset3d(Dataset):
             self.idx_1 = 'non lte test points'
             
         with h5py.File(self.path, 'r') as f:
-            self.mu_inp = f[self.idx_0].attrs['mu']
-            self.std_inp = f[self.idx_0].attrs['std']
             self.len = f[self.idx_0].attrs['len']
-            
-            self.mu_out = f[self.idx_1].attrs['mu']
-            self.std_out = f[self.idx_1].attrs['std']
         
     def __len__(self):
         return self.len

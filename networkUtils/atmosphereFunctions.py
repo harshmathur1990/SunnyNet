@@ -49,26 +49,13 @@ def predict_populations(pop_path, train_data_path, config):
     else:
         model.network.to('cpu')
     model.network.eval()
-
-    print(f'Loading/scaling data...')
-    # pull out scaling numbers
-    mu_inp = train_data.mu_inp
-    std_inp = train_data.std_inp
-
-    mu_out = train_data.mu_out
-    std_out = train_data.std_out
     
     with h5py.File(pop_path, 'r') as f:
         lte = f['lte test windows'][:]
-        
-    lte = (lte-mu_inp)/std_inp
 
     non_lte = numpy.zeros_like(lte)  # placeholder only
     
     data = [list(a) for a in zip(lte,non_lte)]
-
-    mu_out = torch.tensor(mu_out).to(model.device, torch.float)
-    std_out = torch.tensor(std_out).to(model.device, torch.float)
     
     print(f'Forward pass of data throught model...')
     loader = DataLoader(data, batch_size=256, pin_memory=True, num_workers=8)
@@ -78,7 +65,6 @@ def predict_populations(pop_path, train_data_path, config):
             model.network.eval()
             X = point[0].to(model.device, torch.float, non_blocking=True)
             y_pred = model.network(X)
-            y_pred = y_pred * std_out + mu_out
             pred_list.append(y_pred)
     
     print(f'Fixing up dimensions...')
