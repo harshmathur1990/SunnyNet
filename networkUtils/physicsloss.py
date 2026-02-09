@@ -30,12 +30,17 @@ def _nan_stats(x, name):
         return
     n_nan = torch.isnan(x).sum().item()
     if n_nan > 0:
-        total = x.numel()
+        finite = torch.isfinite(x)
+        if finite.any():
+            xmin = x[finite].min().item()
+            xmax = x[finite].max().item()
+        else:
+            xmin, xmax = float("nan"), float("nan")
+
         print(
             f"[NaN DEBUG] {name}: "
-            f"{n_nan}/{total} NaNs "
-            f"(min={x.nanmin().item():.3e}, "
-            f"max={x.nanmax().item():.3e})"
+            f"{n_nan}/{x.numel()} NaNs "
+            f"(min={xmin:.3e}, max={xmax:.3e})"
         )
 
 
@@ -63,6 +68,122 @@ def _range_stats(x, name):
     )
 
 
+def _finite_minmax(x):
+    finite = torch.isfinite(x)
+    if finite.any():
+        return x[finite].min().item(), x[finite].max().item()
+    return float("nan"), float("nan")
+
+def _check_tensor(x, name, debug):
+    """Cheap summary check; prints only if debug=True."""
+    if not debug or not torch.is_tensor(x):
+        return
+    n_nan = torch.isnan(x).sum().item()
+    n_inf = torch.isinf(x).sum().item()
+    xmin, xmax = _finite_minmax(x)
+    print(f"[CHK] {name:18s} shape={tuple(x.shape)}  min={xmin:.3e} max={xmax:.3e}  NaN={n_nan} Inf={n_inf}")
+
+
+def _report_S_negative(
+    *,
+    S, T, logb, l, u, dchi, boltz, logb_ratio, x, expm1_x, denom_raw, denom_fixed, prefactor, eps, nu,
+    debug=True,
+    pick="most_negative"  # or "first"
+):
+    """
+    Prints a single, exact location and the full causal chain.
+    Returns True if it printed.
+    """
+    if not debug:
+        return False
+
+    bad = (S <= 0) | (~torch.isfinite(S))
+    if not bad.any():
+        return False
+
+    # choose an index
+    if pick == "first":
+        flat = torch.nonzero(bad.flatten(), as_tuple=False)[0, 0]
+    else:  # most_negative among bad if possible
+        S_bad = S.clone()
+        S_bad[~bad] = float("inf")
+        flat = torch.argmin(S_bad.flatten())
+
+    B, NL, Nz = S.shape
+    flat = flat.item()
+    b = flat // (NL * Nz)
+    rem = flat % (NL * Nz)
+    li = rem // Nz
+    z  = rem % Nz
+
+    # gather scalars
+    T_bz       = T[b, z].item()
+    l_idx      = l[li].item()
+    u_idx      = u[li].item()
+    nu_li      = nu[li].item()
+    pref_li    = prefactor[li].item()
+    dchi_li    = dchi[li].item()
+
+    logb_l     = logb[b, l_idx, z].item()
+    logb_u     = logb[b, u_idx, z].item()
+    lr_bli_z   = logb_ratio[b, li, z].item()
+    bol_bli_z  = boltz[b, li, z].item()
+    x_bli_z    = x[b, li, z].item()
+    ex_bli_z   = expm1_x[b, li, z].item()
+    dr_bli_z   = denom_raw[b, li, z].item()
+    df_bli_z   = denom_fixed[b, li, z].item()
+    S_bli_z    = S[b, li, z].item()
+
+    # classify exactly where sign became negative
+    # (this is not "guessing": it’s a strict logical trace)
+    reasons = []
+    if not np.isfinite(T_bz) or T_bz <= 0:
+        reasons.append("T is non-finite or <= 0 (boltz invalid)")
+    if not np.isfinite(logb_l) or not np.isfinite(logb_u):
+        reasons.append("logb has non-finite values (logb_ratio invalid)")
+    if not np.isfinite(x_bli_z):
+        reasons.append("x became non-finite (from logb_ratio or boltz)")
+    if np.isfinite(x_bli_z) and x_bli_z < 0:
+        reasons.append("x < 0 => expm1(x) < 0 => denom negative => S negative")
+    if np.isfinite(df_bli_z) and df_bli_z < 0:
+        reasons.append("denom after stabilization is negative (sign preserved) => S negative")
+    if np.isfinite(pref_li) and pref_li <= 0:
+        reasons.append("prefactor <= 0 (should not happen)")
+    if np.isfinite(df_bli_z) and np.isfinite(pref_li) and (pref_li / (df_bli_z + eps)) <= 0:
+        reasons.append("final division yields <=0 (sign from denom)")
+
+    print("\n========== [S NEGATIVE ROOT-CAUSE REPORT] ==========")
+    print(f"Location: batch={b}, line={li}, z={z}")
+    print(f"Levels: l={l_idx}, u={u_idx}")
+    print(f"T[b,z] = {T_bz:.6e} K")
+    print(f"nu[line] = {nu_li:.6e} Hz")
+    print(f"prefactor[line] = {pref_li:.6e}")
+    print(f"dchi[line] = {dchi_li:.6e} J")
+    print("--- logb at location ---")
+    print(f"logb_l = {logb_l:.6e}")
+    print(f"logb_u = {logb_u:.6e}")
+    print("--- intermediates at location ---")
+    print(f"logb_ratio = {lr_bli_z:.6e}")
+    print(f"boltz      = {bol_bli_z:.6e}")
+    print(f"x          = {x_bli_z:.6e}")
+    print(f"expm1(x)   = {ex_bli_z:.6e}")
+    print("--- denom path ---")
+    print(f"denom_raw   = {dr_bli_z:.6e}")
+    print(f"denom_fixed = {df_bli_z:.6e}   (after abs<1e-6 stabilization)")
+    print(f"eps         = {eps:.3e}")
+    print("--- output ---")
+    print(f"S[b,line,z] = {S_bli_z:.6e}")
+    print("--- classification ---")
+    if reasons:
+        for r in reasons:
+            print(f"* {r}")
+    else:
+        print("* Could not classify (unexpected); all upstream values look finite")
+    print("====================================================\n")
+
+    return True
+
+
 def compute_Sv_all_lines_T_batched(
     T,
     logb,
@@ -70,49 +191,83 @@ def compute_Sv_all_lines_T_batched(
     lines,
     nu,
     eps=1e-12,
-    debug=False
+    debug=False,
+    debug_report="most_negative"  # or "first"
 ):
+    """
+    Returns S : (B, Nlines, Nz)
+
+    In debug mode:
+      - prints min/max/NaN/Inf summary for every intermediate
+      - if any S <= 0 or non-finite, prints an exact root-cause report
+        for one offending location (first or most_negative).
+    """
     device = T.device
     dtype  = T.dtype
 
-    if debug:
-        _nan_stats(T, "T (input)")
-        _nan_stats(logb, "logb (input)")
+    _check_tensor(T,   "T (input)",   debug)
+    _check_tensor(logb,"logb (input)",debug)
 
-    # line indices
-    lines = torch.tensor(lines, device=device)
-    l = lines[:, 0]
-    u = lines[:, 1]
+    # line indices on same device
+    l = lines[:, 0]   # (Nlines,)
+    u = lines[:, 1]   # (Nlines,)
 
+    # log(b_l / b_u)
     logb_ratio = logb[:, l, :] - logb[:, u, :]
-    if debug:
-        _nan_stats(logb_ratio, "logb_ratio")
+    _check_tensor(logb_ratio, "logb_ratio", debug)
 
-    dchi = (chi[u] - chi[l]).to(dtype)
+    # Δχ/(kT) term
+    # Ensure chi is on device/dtype for indexing and arithmetic
+    dchi = (chi[u] - chi[l]).to(dtype)  # (Nlines,)
+    _check_tensor(dchi, "dchi", debug)
+
     boltz = dchi[None, :, None] / (kB * T[:, None, :])
-    if debug:
-        _nan_stats(boltz, "boltz")
+    _check_tensor(boltz, "boltz", debug)
 
     x = logb_ratio + boltz
-    if debug:
-        _nan_stats(x, "x = logb_ratio + boltz")
+    _check_tensor(x, "x", debug)
 
-    denom = torch.expm1(x)
-    denom = torch.where(
-        denom.abs() < 1e-6,
-        denom.sign() * 1e-6,
-        denom
+    # denom path
+    expm1_x = torch.expm1(x)
+    _check_tensor(expm1_x, "expm1(x)", debug)
+
+    denom_raw = expm1_x
+    # stabilization: preserve sign but floor magnitude
+    denom_fixed = torch.where(
+        denom_raw.abs() < 1e-6,
+        denom_raw.sign() * 1e-6,
+        denom_raw
     )
-    if debug:
-        _nan_stats(denom, "denom = expm1(x)")
+    _check_tensor(denom_fixed, "denom_fixed", debug)
 
-    prefactor = (2 * h * nu**3) / c**2
-    S = prefactor[None, :, None] / (denom + eps)
-    if debug:
-        _nan_stats(S, "S_nu")
+    # prefactor
+    nu_dev = nu.to(device=device, dtype=dtype)
+    prefactor = (2 * h * nu_dev**3) / c**2   # (Nlines,)
+    _check_tensor(prefactor, "prefactor", debug)
+
+    S = prefactor[None, :, None] / (denom_fixed + eps)
+    _check_tensor(S, "S", debug)
+
+    # If anything is wrong, print exact root-cause report
+    if debug and ((S <= 0).any() or (~torch.isfinite(S)).any()):
+        _report_S_negative(
+            S=S, T=T, logb=logb,
+            l=l, u=u,
+            dchi=dchi,
+            boltz=boltz,
+            logb_ratio=logb_ratio,
+            x=x,
+            expm1_x=expm1_x,
+            denom_raw=denom_raw,
+            denom_fixed=denom_fixed,
+            prefactor=prefactor,
+            eps=eps,
+            nu=nu_dev,
+            debug=True,
+            pick=debug_report
+        )
 
     return S
-
 
 
 def zigzag_regularizer_multiscale(
@@ -258,7 +413,10 @@ class NLTECompositeLoss(nn.Module):
             torch.tensor(c_AHz / np.array(wave_angstrom))
         )
 
-        self.lines = lines
+        self.register_buffer(
+            "lines",
+            torch.tensor(lines, dtype=torch.long)
+        )
         self.lam = lam
         self.min_stride = min_stride
         self.max_frac = max_frac
@@ -298,13 +456,14 @@ class NLTECompositeLoss(nn.Module):
             chi=self.chi,
             lines=self.lines,
             nu=self.nu,
-            debug=self.debug and not self._debug_triggered
+            debug=self.debug and not self._debug_triggered,
+            debug_report="most_negative"   # or "first"
         )
 
         # S must be positive for log10
         # ---------- PHYSICAL SANITY CHECK ----------
         if self.debug and not self._debug_triggered:
-            if (S <= 0).any():
+            if (S <= 0).any() or (~torch.isfinite(S)).any():
                 print("[PHYSICS ERROR] S_nu <= 0 detected")
 
                 _range_stats(T, "T")
