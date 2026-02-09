@@ -113,17 +113,13 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
         if model.complex_loss is True:
             T = extract_temperature(X)
             
-            if i == 0:   # only print for first batch
-                print("DEBUG SHAPES")
-                print("  X      :", X.shape)
-                print("  T      :", T.shape)
-                print("  y_pred :", y_pred.shape)
-                print("  y_true :", y_true.shape)
-    
+            y_pred_squeezed = y_pred.squeeze(-1).squeeze(-1)
+            y_true_squeezed = y_true.squeeze(-1).squeeze(-1)
+            
             batch_loss, components = model.loss_fxn(
                 T,
-                y_pred,
-                y_true
+                y_pred_squeezed,
+                y_true_squeezed
             )
 
             loss1_running += components['data'].item()
