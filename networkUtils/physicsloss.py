@@ -39,6 +39,19 @@ def _nan_stats(x, name):
         )
 
 
+def _range_stats(x, name):
+    if not torch.is_tensor(x):
+        return
+    n_nan = torch.isnan(x).sum().item()
+    n_inf = torch.isinf(x).sum().item()
+    print(
+        f"[RANGE] {name}: "
+        f"min={x.nanmin().item():.3e}, "
+        f"max={x.nanmax().item():.3e}, "
+        f"NaN={n_nan}, Inf={n_inf}"
+    )
+
+
 def compute_Sv_all_lines_T_batched(
     T,
     logb,
@@ -278,12 +291,21 @@ class NLTECompositeLoss(nn.Module):
         )
 
         # S must be positive for log10
+        # ---------- PHYSICAL SANITY CHECK ----------
         if self.debug and not self._debug_triggered:
             if (S <= 0).any():
-                print(
-                    f"[PHYSICS ERROR] S_nu <= 0 detected "
-                    f"(min={S.min().item():.3e})"
-                )
+                print("[PHYSICS ERROR] S_nu <= 0 detected")
+
+                _range_stats(T, "T")
+                _range_stats(logb_pred, "logb_pred")
+                _range_stats(logb_true, "logb_true")
+                _range_stats(S, "S_nu")
+
+                # Optional: identify worst offender
+                idx = torch.argmin(S)
+                print(f"[PHYSICS ERROR] Most negative S_nu value = {S.flatten()[idx].item():.3e}")
+
+                self._debug_triggered = True
 
         logS = torch.log10(torch.clamp(S, min=1e-30))
 
