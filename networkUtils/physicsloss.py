@@ -190,6 +190,7 @@ def compute_Sv_all_lines_T_batched(
     chi,
     lines,
     nu,
+    K_prefactor,
     eps=1e-12,
     debug=False,
     debug_report="most_negative"  # or "first"
@@ -244,7 +245,7 @@ def compute_Sv_all_lines_T_batched(
     _check_tensor(denom_fixed, "denom_fixed", debug)
 
     # prefactor
-    prefactor = (2 * h * nu**3) / c**2   # (Nlines,)
+    prefactor = nu * (nu * (nu * K_prefactor))   # (Nlines,)
     prefactor = prefactor.to(dtype)
     _check_tensor(prefactor, "prefactor", debug)
 
@@ -425,6 +426,11 @@ class NLTECompositeLoss(nn.Module):
             torch.tensor(lines, dtype=torch.long)
         )
 
+        self.register_buffer(
+            "K_prefactor",
+            torch.tensor(2.0 * h / (c**2), dtype=torch.float32)
+        )
+
         self.lam = lam
         self.min_stride = min_stride
         self.max_frac = max_frac
@@ -464,6 +470,7 @@ class NLTECompositeLoss(nn.Module):
             chi=self.chi,
             lines=self.lines,
             nu=self.nu,
+            K_prefactor=self.K_prefactor,
             debug=self.debug and not self._debug_triggered,
             debug_report="most_negative"   # or "first"
         )
