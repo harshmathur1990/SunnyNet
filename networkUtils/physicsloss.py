@@ -42,12 +42,23 @@ def _nan_stats(x, name):
 def _range_stats(x, name):
     if not torch.is_tensor(x):
         return
+
     n_nan = torch.isnan(x).sum().item()
     n_inf = torch.isinf(x).sum().item()
+
+    # mask invalid values for min/max
+    finite = torch.isfinite(x)
+    if finite.any():
+        xmin = x[finite].min().item()
+        xmax = x[finite].max().item()
+    else:
+        xmin = float("nan")
+        xmax = float("nan")
+
     print(
         f"[RANGE] {name}: "
-        f"min={x.nanmin().item():.3e}, "
-        f"max={x.nanmax().item():.3e}, "
+        f"min={xmin:.3e}, "
+        f"max={xmax:.3e}, "
         f"NaN={n_nan}, Inf={n_inf}"
     )
 
