@@ -114,7 +114,8 @@ class Model():
                     chi=chi,
                     lines=lines,
                     wave_angstrom=wave,
-                    data_loss_func=WeightedMSE()
+                    data_loss_func=WeightedMSE(),
+                    debug=True
                 )
                 self.complex_loss = True
             else:
@@ -201,7 +202,8 @@ class Model():
                     chi=chi,
                     lines=lines,
                     wave_angstrom=wave,
-                    data_loss_func=WeightedMSE()
+                    data_loss_func=WeightedMSE(),
+                    debug=True
                 )
                 self.complex_loss = True
             else:

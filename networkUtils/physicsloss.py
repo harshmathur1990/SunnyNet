@@ -25,49 +25,70 @@ chi = [
 ]
 
 
-def compute_Sv_all_lines_T_batched(
-    T,       # (B, Nz)
-    logb,       # (B, Nlevels, Nz)
-    chi,        # (Nlevels,)     [J]
-    lines,      # list of (l, u)
-    nu,         # (Nlines,)      [Hz]
-    eps=1e-12
-):
-    """
-    Returns:
-        S : (B, Nlines, Nz)
-    """
+def _nan_stats(x, name):
+    if not torch.is_tensor(x):
+        return
+    n_nan = torch.isnan(x).sum().item()
+    if n_nan > 0:
+        total = x.numel()
+        print(
+            f"[NaN DEBUG] {name}: "
+            f"{n_nan}/{total} NaNs "
+            f"(min={x.nanmin().item():.3e}, "
+            f"max={x.nanmax().item():.3e})"
+        )
 
+
+def compute_Sv_all_lines_T_batched(
+    T,
+    logb,
+    chi,
+    lines,
+    nu,
+    eps=1e-12,
+    debug=False
+):
     device = T.device
     dtype  = T.dtype
 
+    if debug:
+        _nan_stats(T, "T (input)")
+        _nan_stats(logb, "logb (input)")
+
     # line indices
     lines = torch.tensor(lines, device=device)
-    l = lines[:, 0]                              # (Nlines,)
-    u = lines[:, 1]                              # (Nlines,)
+    l = lines[:, 0]
+    u = lines[:, 1]
 
-    # log(b_l / b_u)
-    logb_ratio = logb[:, l, :] - logb[:, u, :]   # (B, Nlines, Nz)
+    logb_ratio = logb[:, l, :] - logb[:, u, :]
+    if debug:
+        _nan_stats(logb_ratio, "logb_ratio")
 
-    # Boltzmann factor Δχ / (kT)
-    dchi = (chi[u] - chi[l]).to(dtype)           # (Nlines,)
+    dchi = (chi[u] - chi[l]).to(dtype)
     boltz = dchi[None, :, None] / (kB * T[:, None, :])
-                                                   # (B, Nlines, Nz)
+    if debug:
+        _nan_stats(boltz, "boltz")
 
     x = logb_ratio + boltz
+    if debug:
+        _nan_stats(x, "x = logb_ratio + boltz")
 
-    # exp(x) - 1 (stable)
     denom = torch.expm1(x)
     denom = torch.where(
         denom.abs() < 1e-6,
         denom.sign() * 1e-6,
         denom
     )
+    if debug:
+        _nan_stats(denom, "denom = expm1(x)")
 
-    prefactor = (2 * h * nu**3) / c**2            # (Nlines,)
-    S = prefactor[None, :, None] / (denom + eps) # (B, Nlines, Nz)
+    prefactor = (2 * h * nu**3) / c**2
+    S = prefactor[None, :, None] / (denom + eps)
+    if debug:
+        _nan_stats(S, "S_nu")
 
     return S
+
 
 
 def zigzag_regularizer_multiscale(
@@ -142,6 +163,49 @@ def zigzag_regularizer_Sv_batched(
     return lam * core
 
 
+def _clamp_physics_inputs(T, logb):
+    """
+    Gentle, physically motivated clamps to avoid NaNs.
+    """
+
+    # Temperature: never allow zero / negative
+    T = torch.clamp(T, min=1.0)   # 1 K floor (safe, non-invasive)
+
+    # log(b): avoid extreme values early in training
+    logb = torch.clamp(logb, min=-20.0, max=20.0)
+
+    return T, logb
+
+
+def _validate_physics_inputs(T, logb, stage="input", strict=False):
+    """
+    Physics-aware sanity checks.
+
+    strict=False  → warn + clamp
+    strict=True   → raise RuntimeError
+    """
+
+    msgs = []
+
+    # Temperature must be finite and positive
+    if not torch.isfinite(T).all():
+        msgs.append("T contains NaN or Inf")
+
+    if (T <= 0).any():
+        msgs.append(f"T <= 0 detected (min T = {T.min().item():.3e})")
+
+    # logb must be finite (log departure coefficients)
+    if not torch.isfinite(logb).all():
+        msgs.append("logb contains NaN or Inf")
+
+    if len(msgs) > 0:
+        msg = f"[PHYSICS INPUT ERROR @ {stage}] " + " | ".join(msgs)
+        if strict:
+            raise RuntimeError(msg)
+        else:
+            print(msg)
+
+
 class NLTECompositeLoss(nn.Module):
     """
     Total loss = WeightedMSE(log b) + lambda * zig-zag regularization on S_nu
@@ -157,7 +221,8 @@ class NLTECompositeLoss(nn.Module):
         min_stride=2,
         max_frac=0.25,
         delta=1e-2,
-        return_components=True
+        return_components=True,
+        debug=False
     ):
         super().__init__()
 
@@ -176,34 +241,74 @@ class NLTECompositeLoss(nn.Module):
         self.delta = delta
         self.return_components=return_components
 
+        self.debug = debug
+        self._debug_triggered = False  # print once
+
     def forward(
         self,
         T,
         logb_pred,
         logb_true
     ):
-        # --- data loss ---
+
+        # ------------------ INPUT VALIDATION ------------------ #
+        if self.debug and not self._debug_triggered:
+            _validate_physics_inputs(T, logb_pred, stage="forward (pre-clamp)")
+
+        # Optional: soft clamps (recommended)
+        T, logb_pred = _clamp_physics_inputs(T, logb_pred)
+
+        if self.debug and not self._debug_triggered:
+            _validate_physics_inputs(T, logb_pred, stage="forward (post-clamp)")
+
+        # ------------------ DATA LOSS ------------------ #
         L_data = self.data_loss(logb_pred, logb_true)
 
-        # --- compute S_nu ---
+        if self.debug and not self._debug_triggered:
+            _nan_stats(L_data, "L_data")
+
+        # ------------------ PHYSICS ------------------ #
         S = compute_Sv_all_lines_T_batched(
             T=T,
             logb=logb_pred,
             chi=self.chi,
             lines=self.lines,
-            nu=self.nu
+            nu=self.nu,
+            debug=self.debug and not self._debug_triggered
         )
 
-        # --- regularization ---
+        # S must be positive for log10
+        if self.debug and not self._debug_triggered:
+            if (S <= 0).any():
+                print(
+                    f"[PHYSICS ERROR] S_nu <= 0 detected "
+                    f"(min={S.min().item():.3e})"
+                )
+
+        logS = torch.log10(torch.clamp(S, min=1e-30))
+
+        if self.debug and not self._debug_triggered:
+            _nan_stats(logS, "log10(S)")
+
+        # ------------------ REGULARIZATION ------------------ #
         L_reg = zigzag_regularizer_Sv_batched(
-            torch.log10(S),
+            logS,
             lam=self.lam,
             min_stride=self.min_stride,
             max_frac=self.max_frac,
             delta=self.delta
         )
 
+        if self.debug and not self._debug_triggered:
+            _nan_stats(L_reg, "L_reg")
+
+        # ------------------ TOTAL ------------------ #
         L_total = L_data + L_reg
+
+        if self.debug and not self._debug_triggered:
+            if torch.isnan(L_total):
+                print("[NaN DEBUG] NaN detected in L_total — disabling debug")
+                self._debug_triggered = True
 
         if self.return_components:
             return L_total, {
