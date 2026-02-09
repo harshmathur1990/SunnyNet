@@ -265,7 +265,7 @@ def compute_Sv_all_lines_T_batched(
             denom_fixed=denom_fixed,
             prefactor=prefactor,
             eps=eps,
-            nu=nu_dev,
+            nu=nu,
             debug=True,
             pick=debug_report
         )
