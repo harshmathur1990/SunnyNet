@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from networkUtils.modelArchitectures import *
 from networkUtils.lossFunctions import *
+from networkUtils.physicsloss import *
 
 class Model():
     def __init__(self, params):
@@ -109,13 +110,14 @@ class Model():
             elif params['loss_fxn'] == 'MSELoss':
                 self.loss_fxn = nn.MSELoss()
             elif params['loss_fxn'] == 'PhysicsLoss':
-                self.complex_loss = True
-                self.loss_fxn1 = WeightedMSE()
-                self.loss_fxn2 = PhysicsLossAllLines(
-                    lines=lines,
+                self.data_loss = WeightedMSE()
+                self.loss_fxn = NLTECompositeLoss(
                     chi=chi,
-                    g=g,
+                    lines=lines,
+                    wave_angstrom=wave,
+                    data_loss_func=data_loss
                 )
+                self.complex_loss = True
             else:
                 raise Exception("!!Invalid loss function: {}!!".format(params['loss_fxn']))   
 
@@ -194,13 +196,14 @@ class Model():
             elif params['loss_fxn'] == 'MSELoss':
                 self.loss_fxn = nn.MSELoss()
             elif params['loss_fxn'] == 'PhysicsLoss':
-                self.complex_loss = True
-                self.loss_fxn1 = WeightedMSE()
-                self.loss_fxn2 = PhysicsLossAllLines(
-                    lines=lines,
+                self.data_loss = WeightedMSE()
+                self.loss_fxn = NLTECompositeLoss(
                     chi=chi,
-                    g=g,
+                    lines=lines,
+                    wave_angstrom=wave,
+                    data_loss_func=data_loss
                 )
+                self.complex_loss = True
             else:
                 raise Exception("!!Invalid loss function: {}!!".format(params['loss_fxn']))       
         else:

@@ -4,30 +4,6 @@ import torch.nn.functional as F
 import numpy as np
 
 
-class WeightedMSE(nn.Module):
-    """
-    Weighted MSE loss where weights depend only on the target magnitude.
-    Designed for NLTE departure coefficients (log b).
-
-    Loss = mean( (1 + |y_true|) * (y_pred - y_true)^2 )
-    """
-    def __init__(self):
-        super().__init__()
-
-    def forward(self, y_pred, y_true):
-        w = 1.0 + torch.abs(y_true)
-        return (w * (y_pred - y_true) ** 2).mean()
-
-
-class RelativeMSE(nn.Module):
-    def __init__(self, eps=1e-3):
-        super().__init__()
-        self.eps = eps
-
-    def forward(self, y_pred, y_true):
-        return (((y_pred - y_true) / (torch.abs(y_true) + self.eps))**2).mean()
-
-
 c_AHz = 2.99792458e18  # Hz * Å
 h  = 6.62607015e-34
 c  = 2.99792458e8
@@ -36,9 +12,9 @@ kB = 1.380649e-23
 
 lines = [(0,1), (0,2), (0, 3), (0, 4), (1,2), (1,3), (1, 4), (2,3), (2, 4), (3, 4)]
 
+
 wave = np.ndarray([1215.6701, 1025.7220, 972.53650, 949.74287, 6562.79, 4861.35, 4340.472, 18750, 12820, 40510])
 
-nu = c_AHz / lambda_angstrom
 
 chi = [
     1.6339941854018686e-18,
@@ -48,8 +24,9 @@ chi = [
     2.1802152677122893e-18
 ]
 
+
 def compute_Sv_all_lines_logT_batched(
-    logT,       # (B, Nz)        log10(T)
+    T,       # (B, Nz)
     logb,       # (B, Nlevels, Nz)
     chi,        # (Nlevels,)     [J]
     lines,      # list of (l, u)
@@ -63,9 +40,6 @@ def compute_Sv_all_lines_logT_batched(
 
     device = logT.device
     dtype  = logT.dtype
-
-    # log10(T) -> T
-    T = torch.pow(10.0, logT)                    # (B, Nz)
 
     # line indices
     lines = torch.tensor(lines, device=device)
@@ -146,6 +120,7 @@ def zigzag_regularizer_multiscale(
 
     return total / (wsum + 1e-12)
 
+
 def zigzag_regularizer_Sv_batched(
     S,          # (B, Nlines, Nz)
     lam=1e-3,
@@ -165,3 +140,76 @@ def zigzag_regularizer_Sv_batched(
     )
 
     return lam * core
+
+
+class NLTECompositeLoss(nn.Module):
+    """
+    Total loss = WeightedMSE(log b) + lambda * zig-zag regularization on S_nu
+    """
+
+    def __init__(
+        self,
+        chi,
+        lines,
+        wave_angstrom,
+        data_loss_func,
+        lam=1e-3,
+        min_stride=2,
+        max_frac=0.25,
+        delta=1e-2,
+        return_components=True
+    ):
+        super().__init__()
+
+        self.data_loss = data_loss_func
+
+        self.register_buffer("chi", torch.tensor(chi))
+        self.register_buffer(
+            "nu",
+            torch.tensor(c_AHz / np.array(wave_angstrom))
+        )
+
+        self.lines = lines
+        self.lam = lam
+        self.min_stride = min_stride
+        self.max_frac = max_frac
+        self.delta = delta
+        self.return_components=return_components
+
+    def forward(
+        self,
+        T,
+        logb_pred,
+        logb_true
+    ):
+        # --- data loss ---
+        L_data = self.data_loss(logb_pred, logb_true)
+
+        # --- compute S_nu ---
+        S = compute_Sv_all_lines_logT_batched(
+            T=T,
+            logb=logb_pred,
+            chi=self.chi,
+            lines=self.lines,
+            nu=self.nu
+        )
+
+        # --- regularization ---
+        L_reg = zigzag_regularizer_Sv_batched(
+            torch.log10(S),
+            lam=self.lam,
+            min_stride=self.min_stride,
+            max_frac=self.max_frac,
+            delta=self.delta
+        )
+
+        L_total = L_data + L_reg
+
+        if self.return_components:
+            return L_total, {
+                "data": L_data.detach(),
+                "regularization": L_reg.detach(),
+                "lambda": self.lam
+            }
+        else:
+            return L_total

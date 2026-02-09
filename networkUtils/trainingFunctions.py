@@ -3,6 +3,7 @@ import torch
 import numpy as np
 from tqdm import tqdm
 
+
 def train(params, model, dataLoaders):
     full_path = os.path.join(params['save_folder'], params['model_save'])
     loss_dict = {'train':[], 'val':[]}
@@ -52,6 +53,19 @@ def extract_temperature(X):
     return T
 
 
+def update_lambda(criterion, reg_avg, data_avg, target=(0.1, 1.0)):
+    """
+    Adjust lambda so that reg/data stays in target range.
+    Call once per epoch.
+    """
+    ratio = reg_avg / (data_avg + 1e-12)
+
+    if ratio > target[1]:
+        criterion.lam *= 0.9     # too strong → relax
+    elif ratio < target[0]:
+        criterion.lam *= 1.1     # too weak → strengthen
+
+
 def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
     '''
     Runs epoch given the params in train()
@@ -76,9 +90,14 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
     if verbose:
         print('-'*10, f'Epoch {cur_epoch}: {mode}', '-'*10)
 
+    if model.complex_loss is True:
+        desc = f"{mode.upper()} | Epoch {cur_epoch} | λ = {model.loss_fxn.lam:.2e}"
+    else:
+        desc = f"{mode.upper()} | Epoch {cur_epoch}"
+
     pbar = tqdm(
         dataLoaders[mode],
-        desc=f"{mode.upper()} | Epoch {cur_epoch}",
+        desc=desc,
         leave=True,
         ncols=100
     )
@@ -90,16 +109,18 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
 
         # ------------ FORWARD -------------- #
         y_pred = model.network(X)
+        
         if model.complex_loss is True:
             T = extract_temperature(X)
             
-            loss_1 = model.loss_fxn1(y_pred, y_true)
-            loss_2 = model.loss_fxn2(y_pred, T)
+            batch_loss, components = model.loss_fxn(
+                T,
+                y_pred,
+                y_true
+            )
 
-            batch_loss = loss_1 + loss_2
-
-            loss1_running += loss_1.item()
-            loss2_running += loss_2.item()
+            loss1_running += components['data'].item()
+            loss2_running += components['regularization'].item()
 
         else:
             batch_loss = model.loss_fxn(y_pred, y_true)
@@ -117,13 +138,21 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
             pbar.set_postfix({
                 "L": f"{epoch_loss / (i + 1):.3e}",
                 "L1": f"{loss1_running / (i + 1):.3e}",
-                "L2": f"{loss2_running / (i + 1):.3e}",
+                "L2": f"{loss2_running / (i + 1):.3e}"
             })
+
         else:
             pbar.set_postfix(loss=f"{epoch_loss / (i + 1):.3e}")
 
     epoch_loss /= len(dataLoaders[mode])
     print(f"TOTAL {mode.upper()} LOSS = {epoch_loss:.8f}")
+
+    if model.complex_loss is True:
+        update_lambda(
+            criterion=model.loss_fxn,
+            reg_avg=loss2_running / (i + 1),
+            data_avg=loss1_running / (i + 1)
+        )
 
     return epoch_loss
 
