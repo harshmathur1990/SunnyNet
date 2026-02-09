@@ -25,7 +25,7 @@ chi = [
 ]
 
 
-def compute_Sv_all_lines_logT_batched(
+def compute_Sv_all_lines_T_batched(
     T,       # (B, Nz)
     logb,       # (B, Nlevels, Nz)
     chi,        # (Nlevels,)     [J]
@@ -38,8 +38,8 @@ def compute_Sv_all_lines_logT_batched(
         S : (B, Nlines, Nz)
     """
 
-    device = logT.device
-    dtype  = logT.dtype
+    device = T.device
+    dtype  = T.dtype
 
     # line indices
     lines = torch.tensor(lines, device=device)
@@ -186,7 +186,7 @@ class NLTECompositeLoss(nn.Module):
         L_data = self.data_loss(logb_pred, logb_true)
 
         # --- compute S_nu ---
-        S = compute_Sv_all_lines_logT_batched(
+        S = compute_Sv_all_lines_T_batched(
             T=T,
             logb=logb_pred,
             chi=self.chi,
