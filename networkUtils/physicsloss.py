@@ -205,6 +205,9 @@ def compute_Sv_all_lines_T_batched(
     device = T.device
     dtype  = T.dtype
 
+    if debug:
+        print(f"[CHK] T dtype = {T.dtype}")
+
     _check_tensor(T,   "T (input)",   debug)
     _check_tensor(logb,"logb (input)",debug)
 
@@ -241,8 +244,8 @@ def compute_Sv_all_lines_T_batched(
     _check_tensor(denom_fixed, "denom_fixed", debug)
 
     # prefactor
-    nu_dev = nu.to(device=device, dtype=dtype)
-    prefactor = (2 * h * nu_dev**3) / c**2   # (Nlines,)
+    prefactor = (2 * h * nu**3) / c**2   # (Nlines,)
+    prefactor = prefactor.to(dtype)
     _check_tensor(prefactor, "prefactor", debug)
 
     S = prefactor[None, :, None] / (denom_fixed + eps)
@@ -407,16 +410,21 @@ class NLTECompositeLoss(nn.Module):
 
         self.data_loss = data_loss_func
 
-        self.register_buffer("chi", torch.tensor(chi))
+        self.register_buffer(
+            "chi",
+            torch.tensor(chi, dtype=torch.float32)
+        )
+
         self.register_buffer(
             "nu",
-            torch.tensor(c_AHz / np.array(wave_angstrom))
+            torch.tensor(c_AHz / np.array(wave_angstrom), dtype=torch.float32)
         )
 
         self.register_buffer(
             "lines",
             torch.tensor(lines, dtype=torch.long)
         )
+
         self.lam = lam
         self.min_stride = min_stride
         self.max_frac = max_frac
