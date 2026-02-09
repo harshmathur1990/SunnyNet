@@ -118,7 +118,9 @@ class Model():
                 )
                 self.complex_loss = True
             else:
-                raise Exception("!!Invalid loss function: {}!!".format(params['loss_fxn']))   
+                raise Exception("!!Invalid loss function: {}!!".format(params['loss_fxn']))
+
+            self.loss_fxn.to(self.device)
 
             ## set optimizer ##
             if params['optimizer'] == 'Adam':
@@ -203,7 +205,10 @@ class Model():
                 )
                 self.complex_loss = True
             else:
-                raise Exception("!!Invalid loss function: {}!!".format(params['loss_fxn']))       
+                raise Exception("!!Invalid loss function: {}!!".format(params['loss_fxn'])) 
+
+            self.loss_fxn.to(self.device)
+      
         else:
             raise Exception("!! Invalid model mode")
         
