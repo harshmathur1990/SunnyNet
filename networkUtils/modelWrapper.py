@@ -110,12 +110,11 @@ class Model():
             elif params['loss_fxn'] == 'MSELoss':
                 self.loss_fxn = nn.MSELoss()
             elif params['loss_fxn'] == 'PhysicsLoss':
-                self.data_loss = WeightedMSE()
                 self.loss_fxn = NLTECompositeLoss(
                     chi=chi,
                     lines=lines,
                     wave_angstrom=wave,
-                    data_loss_func=data_loss
+                    data_loss_func=WeightedMSE()
                 )
                 self.complex_loss = True
             else:
@@ -196,12 +195,11 @@ class Model():
             elif params['loss_fxn'] == 'MSELoss':
                 self.loss_fxn = nn.MSELoss()
             elif params['loss_fxn'] == 'PhysicsLoss':
-                self.data_loss = WeightedMSE()
                 self.loss_fxn = NLTECompositeLoss(
                     chi=chi,
                     lines=lines,
                     wave_angstrom=wave,
-                    data_loss_func=data_loss
+                    data_loss_func=WeightedMSE()
                 )
                 self.complex_loss = True
             else:
