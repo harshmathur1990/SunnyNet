@@ -82,7 +82,6 @@ def update_lambda(
     criterion.lam = max(lam_min, min(lam_max, criterion.lam))
 
 
-
 def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
     '''
     Runs epoch given the params in train()

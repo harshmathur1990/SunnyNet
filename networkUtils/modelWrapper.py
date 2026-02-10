@@ -123,6 +123,9 @@ class Model():
 
             self.loss_fxn.to(self.device)
 
+            if self.complex_loss is True:
+                self.loss_fxn.data_loss.to(self.device)
+
             ## set optimizer ##
             if params['optimizer'] == 'Adam':
                 self.optimizer = torch.optim.Adam(self.network.parameters(), lr=params['learn_rate'])
@@ -210,6 +213,9 @@ class Model():
                 raise Exception("!!Invalid loss function: {}!!".format(params['loss_fxn'])) 
 
             self.loss_fxn.to(self.device)
+
+            if self.complex_loss is True:
+                self.loss_fxn.data_loss.to(self.device)
       
         else:
             raise Exception("!! Invalid model mode")
