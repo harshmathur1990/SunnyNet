@@ -99,7 +99,7 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
         dataLoaders[mode],
         desc=desc,
         leave=True,
-        ncols=100
+        ncols=150
     )
 
     for i, instance in enumerate(pbar):

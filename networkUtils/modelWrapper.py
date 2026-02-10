@@ -115,7 +115,7 @@ class Model():
                     lines=lines,
                     wave_angstrom=wave,
                     data_loss_func=WeightedMSE(),
-                    debug=True
+                    debug=False
                 )
                 self.complex_loss = True
             else:
@@ -203,7 +203,7 @@ class Model():
                     lines=lines,
                     wave_angstrom=wave,
                     data_loss_func=WeightedMSE(),
-                    debug=True
+                    debug=False
                 )
                 self.complex_loss = True
             else:
