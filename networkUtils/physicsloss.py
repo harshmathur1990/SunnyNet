@@ -427,6 +427,11 @@ class NLTECompositeLoss(nn.Module):
         nu = c_AHz / np.array(wave_angstrom)
 
         self.register_buffer(
+            "nu",
+            torch.tensor(nu, dtype=torch.float32)
+        )
+
+        self.register_buffer(
             "K_prefactor",
             torch.tensor((2.0 * h * nu/ (c**2)) * nu * nu, dtype=torch.float32)
         )
