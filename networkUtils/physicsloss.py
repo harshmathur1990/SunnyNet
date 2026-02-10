@@ -279,38 +279,37 @@ def compute_Sv_all_lines_T_batched(
 
 def zigzag_regularizer_multiscale(
     f,                  # (..., Nz)
-    min_stride=2,
+    min_stride=1,
     max_frac=0.25,
-    delta=1e-2
+    delta=1e-2,
+    eps=1e-12
 ):
     """
-    Fully vectorized multi-scale curvature regularizer.
+    Multi-scale curvature regularizer with *equidistant* strides.
 
-    Penalizes zig-zag patterns up to max_frac * Nz.
+    Penalizes zig-zag patterns at all scales from 1 to max_frac * Nz.
     Operates on the last dimension (z).
     """
+
+    f0 = f - f.mean(dim=-1, keepdim=True)
+    f0 = f0 / (f0.std(dim=-1, keepdim=True, correction=0) + eps)
 
     Nz = f.shape[-1]
     max_stride = max(min_stride, int(max_frac * Nz))
 
-    # build logarithmic stride list: 2, 4, 8, ...
-    strides = []
-    s = min_stride
-    while s <= max_stride and 2 * s < Nz:
-        strides.append(s)
-        s *= 2
-
-    if len(strides) == 0:
-        return torch.zeros((), device=f.device, dtype=f.dtype)
+    # equidistant strides: 1, 2, 3, ..., max_stride
+    strides = range(min_stride, max_stride + 1)
 
     total = 0.0
     wsum  = 0.0
 
     for s in strides:
-        # centered second difference with stride s
-        mid   = f[..., s:-s]
-        left  = f[..., :-2*s]
-        right = f[..., 2*s:]
+        if 2 * s >= Nz:
+            break
+
+        mid   = f0[..., s:-s]
+        left  = f0[..., :-2*s]
+        right = f0[..., 2*s:]
 
         d2 = right - 2.0 * mid + left
 
@@ -321,6 +320,7 @@ def zigzag_regularizer_multiscale(
             delta * (abs_d2 - 0.5 * delta)
         ).mean()
 
+        # optional scale compensation (important)
         w = 1.0 / (s * s)
         total += w * loss_s
         wsum  += w
