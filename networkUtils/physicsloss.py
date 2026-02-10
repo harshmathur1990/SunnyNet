@@ -4,25 +4,31 @@ import torch.nn.functional as F
 import numpy as np
 
 
-c_AHz = 2.99792458e18  # Hz * Å
-h  = 6.62607015e-34
-c  = 2.99792458e8
-kB = 1.380649e-23
+c_AHz = np.float32(2.99792458e18)  # Hz * Å
+h  = np.float32(6.62607015e-34)
+c  = np.float32(2.99792458e8)
+kB = np.float32(1.380649e-23)
 
 
-lines = [(0,1), (0,2), (0, 3), (0, 4), (1,2), (1,3), (1, 4), (2,3), (2, 4), (3, 4)]
+lines = np.array(
+    [(0,1), (0,2), (0, 3), (0, 4), (1,2), (1,3), (1, 4), (2,3), (2, 4), (3, 4)],
+    dtype=np.float32
+)
 
 
-wave = np.array([1215.6701, 1025.7220, 972.53650, 949.74287, 6562.79, 4861.35, 4340.472, 18750, 12820, 40510])
+wave = np.array([1215.6701, 1025.7220, 972.53650, 949.74287, 6562.79, 4861.35, 4340.472, 18750, 12820, 40510], dtype=np.float32)
 
 
-chi = [
-    1.6339941854018686e-18,
-    1.936585907218822e-18,
-    2.0424878450955273e-18,
-    2.091506177644877e-18,
-    2.1802152677122893e-18
-]
+chi = np.array(
+    [
+        1.6339941854018686e-18,
+        1.936585907218822e-18,
+        2.0424878450955273e-18,
+        2.091506177644877e-18,
+        2.1802152677122893e-18
+    ],
+    dtype=np.float32
+)
 
 
 def _nan_stats(x, name):
@@ -244,12 +250,9 @@ def compute_Sv_all_lines_T_batched(
     )
     _check_tensor(denom_fixed, "denom_fixed", debug)
 
-    # prefactor
-    prefactor = nu * (nu * (nu * K_prefactor))   # (Nlines,)
-    prefactor = prefactor.to(dtype)
-    _check_tensor(prefactor, "prefactor", debug)
+    _check_tensor(K_prefactor, "prefactor", debug)
 
-    S = prefactor[None, :, None] / (denom_fixed + eps)
+    S = K_prefactor[None, :, None] / (denom_fixed + eps)
     _check_tensor(S, "S", debug)
 
     # If anything is wrong, print exact root-cause report
@@ -417,18 +420,15 @@ class NLTECompositeLoss(nn.Module):
         )
 
         self.register_buffer(
-            "nu",
-            torch.tensor(c_AHz / np.array(wave_angstrom), dtype=torch.float32)
-        )
-
-        self.register_buffer(
             "lines",
             torch.tensor(lines, dtype=torch.long)
         )
 
+        nu = c_AHz / np.array(wave_angstrom)
+
         self.register_buffer(
             "K_prefactor",
-            torch.tensor(2.0 * h / (c**2), dtype=torch.float32)
+            torch.tensor((2.0 * h * nu/ (c**2)) * nu * nu, dtype=torch.float32)
         )
 
         self.lam = lam
