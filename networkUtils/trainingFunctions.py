@@ -1,6 +1,7 @@
 import os
 import torch
 import numpy as np
+import math
 from tqdm import tqdm
 
 
@@ -53,17 +54,33 @@ def extract_temperature(X):
     return T
 
 
-def update_lambda(criterion, reg_avg, data_avg, target=(0.1, 1.0)):
+def update_lambda(
+    criterion,
+    reg_avg,
+    data_avg,
+    target=(0.1, 1.0),
+    eta=0.3,
+    lam_min=1e-12,
+    lam_max=1e6,
+):
     """
-    Adjust lambda so that reg/data stays in target range.
+    Log-space feedback controller for regularization weight.
     Call once per epoch.
     """
     ratio = reg_avg / (data_avg + 1e-12)
 
-    if ratio > target[1]:
-        criterion.lam *= 0.9     # too strong → relax
-    elif ratio < target[0]:
-        criterion.lam *= 1.1     # too weak → strengthen
+    # Target ratio = geometric mean (center in log-space)
+    r_target = math.sqrt(target[0] * target[1])
+
+    # Log error
+    err = math.log(r_target) - math.log(ratio + 1e-12)
+
+    # Multiplicative update
+    criterion.lam *= math.exp(eta * err)
+
+    # Safety clamps
+    criterion.lam = max(lam_min, min(lam_max, criterion.lam))
+
 
 
 def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
