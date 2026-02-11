@@ -198,64 +198,69 @@ def compute_Sv_all_lines_T_batched(
     nu,
     K_prefactor,
     eps=1e-12,
+    denom_floor=1e-6,
+    return_x=False,
     debug=False,
-    debug_report="most_negative"  # or "first"
+    debug_report="most_negative"
 ):
     """
-    Returns S : (B, Nlines, Nz)
+    Returns:
+        S : (B, Nlines, Nz)
+
+    If return_x=True:
+        returns (S, x)
 
     In debug mode:
-      - prints min/max/NaN/Inf summary for every intermediate
-      - if any S <= 0 or non-finite, prints an exact root-cause report
-        for one offending location (first or most_negative).
+        prints intermediate diagnostics.
     """
+
     device = T.device
     dtype  = T.dtype
 
     if debug:
         print(f"[CHK] T dtype = {T.dtype}")
 
-    _check_tensor(T,   "T (input)",   debug)
-    _check_tensor(logb,"logb (input)",debug)
+    _check_tensor(T,    "T (input)",    debug)
+    _check_tensor(logb, "logb (input)", debug)
 
-    # line indices on same device
-    l = lines[:, 0]   # (Nlines,)
-    u = lines[:, 1]   # (Nlines,)
+    # ensure lines tensor on device
+    if not torch.is_tensor(lines):
+        lines = torch.tensor(lines, device=device)
+    else:
+        lines = lines.to(device)
+
+    l = lines[:, 0]
+    u = lines[:, 1]
 
     # log(b_l / b_u)
     logb_ratio = logb[:, l, :] - logb[:, u, :]
     _check_tensor(logb_ratio, "logb_ratio", debug)
 
-    # Δχ/(kT) term
-    # Ensure chi is on device/dtype for indexing and arithmetic
-    dchi = (chi[u] - chi[l]).to(dtype)  # (Nlines,)
+    # Δχ/(kT)
+    dchi = (chi[u] - chi[l]).to(device=device, dtype=dtype)
     _check_tensor(dchi, "dchi", debug)
 
     boltz = dchi[None, :, None] / (kB * T[:, None, :])
     _check_tensor(boltz, "boltz", debug)
 
+    # exponent argument (THIS is the physically important variable)
     x = logb_ratio + boltz
     _check_tensor(x, "x", debug)
 
-    # denom path
+    # stable exp(x) - 1
     expm1_x = torch.expm1(x)
     _check_tensor(expm1_x, "expm1(x)", debug)
 
-    denom_raw = expm1_x
-    # stabilization: preserve sign but floor magnitude
-    denom_fixed = torch.where(
-        denom_raw.abs() < 1e-6,
-        denom_raw.sign() * 1e-6,
-        denom_raw
-    )
-    _check_tensor(denom_fixed, "denom_fixed", debug)
+    # smooth floor instead of hard clamp
+    denom = torch.sign(expm1_x) * torch.sqrt(expm1_x**2 + denom_floor**2)
+    _check_tensor(denom, "denom (smoothed)", debug)
 
     _check_tensor(K_prefactor, "prefactor", debug)
 
-    S = K_prefactor[None, :, None] / (denom_fixed + eps)
+    S = K_prefactor[None, :, None] / (denom + eps)
     _check_tensor(S, "S", debug)
 
-    # If anything is wrong, print exact root-cause report
+    # debug deep inspection
     if debug and ((S <= 0).any() or (~torch.isfinite(S)).any()):
         _report_S_negative(
             S=S, T=T, logb=logb,
@@ -265,8 +270,8 @@ def compute_Sv_all_lines_T_batched(
             logb_ratio=logb_ratio,
             x=x,
             expm1_x=expm1_x,
-            denom_raw=denom_raw,
-            denom_fixed=denom_fixed,
+            denom_raw=expm1_x,
+            denom_fixed=denom,
             prefactor=K_prefactor,
             eps=eps,
             nu=nu,
@@ -274,7 +279,11 @@ def compute_Sv_all_lines_T_batched(
             pick=debug_report
         )
 
-    return S
+    if return_x:
+        return S, x
+    else:
+        return S
+
 
 
 def zigzag_regularizer_multiscale(
@@ -282,7 +291,8 @@ def zigzag_regularizer_multiscale(
     min_stride=1,
     max_frac=0.25,
     delta=1e-2,
-    eps=1e-12
+    eps=1e-12,
+    normalize=False
 ):
     """
     Multi-scale curvature regularizer with *equidistant* strides.
@@ -291,8 +301,11 @@ def zigzag_regularizer_multiscale(
     Operates on the last dimension (z).
     """
 
-    f0 = f - f.mean(dim=-1, keepdim=True)
-    f0 = f0 / (f0.std(dim=-1, keepdim=True, correction=0) + eps)
+    if normalize:
+        f0 = f - f.mean(dim=-1, keepdim=True)
+        f0 = f0 / (f0.std(dim=-1, keepdim=True, correction=0) + eps)
+    else:
+        f0 = f
 
     Nz = f.shape[-1]
     max_stride = max(min_stride, int(max_frac * Nz))
@@ -457,7 +470,7 @@ class NLTECompositeLoss(nn.Module):
             _validate_physics_inputs(T, logb_pred, stage="forward (pre-clamp)")
 
         # Optional: soft clamps (recommended)
-        T, logb_pred = _clamp_physics_inputs(T, logb_pred)
+        # T, logb_pred = _clamp_physics_inputs(T, logb_pred)
 
         if self.debug and not self._debug_triggered:
             _validate_physics_inputs(T, logb_pred, stage="forward (post-clamp)")
@@ -469,7 +482,7 @@ class NLTECompositeLoss(nn.Module):
             _nan_stats(L_data, "L_data")
 
         # ------------------ PHYSICS ------------------ #
-        S = compute_Sv_all_lines_T_batched(
+        S, x = compute_Sv_all_lines_T_batched(
             T=T,
             logb=logb_pred,
             chi=self.chi,
@@ -477,7 +490,8 @@ class NLTECompositeLoss(nn.Module):
             nu=self.nu,
             K_prefactor=self.K_prefactor,
             debug=self.debug and not self._debug_triggered,
-            debug_report="most_negative"   # or "first"
+            debug_report="most_negative",   # or "first"
+            return_x=True
         )
 
         # S must be positive for log10
@@ -490,6 +504,7 @@ class NLTECompositeLoss(nn.Module):
                 _range_stats(logb_pred, "logb_pred")
                 _range_stats(logb_true, "logb_true")
                 _range_stats(S, "S_nu")
+                _range_stats(x, 'x')
 
                 # Optional: identify worst offender
                 idx = torch.argmin(S)
@@ -497,14 +512,14 @@ class NLTECompositeLoss(nn.Module):
 
                 self._debug_triggered = True
 
-        logS = torch.log10(torch.clamp(S, min=1e-30))
+        # logS = torch.log10(torch.clamp(S, min=1e-30))
 
-        if self.debug and not self._debug_triggered:
-            _nan_stats(logS, "log10(S)")
+        # if self.debug and not self._debug_triggered:
+            # _nan_stats(logS, "log10(S)")
 
         # ------------------ REGULARIZATION ------------------ #
         L_reg = zigzag_regularizer_Sv_batched(
-            logS,
+            x,
             lam=self.lam,
             min_stride=self.min_stride,
             max_frac=self.max_frac,
