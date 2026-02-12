@@ -15,12 +15,12 @@ def train(params, model, dataLoaders):
     for epoch in range(params['num_epochs']):
         ## train forwards ##
         model.network.train()
-        tr_loss = run_epoch('train', model, epoch, dataLoaders)
+        tr_loss, loss1_running, loss2_running = run_epoch('train', model, epoch, dataLoaders)
         loss_dict['train'].append(tr_loss)
         ## eval forward ##
         with torch.no_grad():
             model.network.eval()
-            val_loss = run_epoch('val', model, epoch, dataLoaders)
+            val_loss, _, _ = run_epoch('val', model, epoch, dataLoaders)
             loss_dict['val'].append(val_loss)
         
         ## check los ##
@@ -36,6 +36,13 @@ def train(params, model, dataLoaders):
         if stop == True:
             print(f'Early stopping condition met, stopping at epoch {epoch}...')
             break
+
+        if model.complex_loss is True:
+            update_lambda(
+                criterion=model.loss_fxn,
+                reg_avg=loss2_running,
+                data_avg=loss1_running
+            )
             
     return loss_dict
 
@@ -164,14 +171,10 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
             pbar.set_postfix(loss=f"{epoch_loss / (i + 1):.3e}")
 
     epoch_loss /= len(dataLoaders[mode])
+    loss1_running /= len(dataLoaders[model])
+    loss2_running /= len(dataLoaders[model])
+
     print(f"TOTAL {mode.upper()} LOSS = {epoch_loss:.8f}")
 
-    if model.complex_loss is True:
-        update_lambda(
-            criterion=model.loss_fxn,
-            reg_avg=loss2_running / (i + 1),
-            data_avg=loss1_running / (i + 1)
-        )
-
-    return epoch_loss
+    return epoch_loss, loss1_running, loss2_running
 
