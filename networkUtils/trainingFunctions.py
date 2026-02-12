@@ -171,8 +171,8 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
             pbar.set_postfix(loss=f"{epoch_loss / (i + 1):.3e}")
 
     epoch_loss /= len(dataLoaders[mode])
-    loss1_running /= len(dataLoaders[model])
-    loss2_running /= len(dataLoaders[model])
+    loss1_running /= len(dataLoaders[mode])
+    loss2_running /= len(dataLoaders[mode])
 
     print(f"TOTAL {mode.upper()} LOSS = {epoch_loss:.8f}")
 

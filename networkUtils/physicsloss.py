@@ -419,7 +419,7 @@ class NLTECompositeLoss(nn.Module):
         lam=1e-1,
         min_stride=2,
         max_frac=0.25,
-        delta=1e-2,
+        delta=1e-1,
         return_components=True,
         debug=False
     ):
@@ -517,9 +517,11 @@ class NLTECompositeLoss(nn.Module):
         # if self.debug and not self._debug_triggered:
             # _nan_stats(logS, "log10(S)")
 
+        x_fluct = x - x.mean(dim=-1, keepdim=True)
+
         # ------------------ REGULARIZATION ------------------ #
         L_reg = zigzag_regularizer_Sv_batched(
-            x,
+            x_fluct,
             lam=self.lam,
             min_stride=self.min_stride,
             max_frac=self.max_frac,
