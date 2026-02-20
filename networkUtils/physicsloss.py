@@ -496,17 +496,16 @@ class NLTECompositeLoss(nn.Module):
             return_x=True
         )
 
-        with torch.no_grad():
-            S_true, _ = compute_Sv_all_lines_T_batched(
-                T=T,
-                logb=logb_true,
-                chi=self.chi,
-                lines=self.lines,
-                nu=self.nu,
-                K_prefactor=self.K_prefactor,
-                debug=False,
-                return_x=True
-            )
+        S_true, _ = compute_Sv_all_lines_T_batched(
+            T=T,
+            logb=logb_true,
+            chi=self.chi,
+            lines=self.lines,
+            nu=self.nu,
+            K_prefactor=self.K_prefactor,
+            debug=False,
+            return_x=True
+        )
 
         logS_pred = torch.log10(torch.clamp(S_pred, min=1e-30))
         logS_true = torch.log10(torch.clamp(S_true, min=1e-30))
@@ -553,7 +552,7 @@ class NLTECompositeLoss(nn.Module):
         #     _nan_stats(L_reg, "L_reg")
 
         # ------------------ TOTAL ------------------ #
-        L_total = L_data + L_S  # + L_reg
+        L_total = L_S  # + L_reg
 
         if self.debug and not self._debug_triggered:
             if torch.isnan(L_total):
