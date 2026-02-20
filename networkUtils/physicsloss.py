@@ -417,7 +417,7 @@ class NLTECompositeLoss(nn.Module):
         wave_angstrom,
         data_loss_func,
         lam=1e-1,
-        lam_S=1,
+        lam_S=1e-2,
         min_stride=2,
         max_frac=0.25,
         delta=1e-1,
