@@ -74,7 +74,7 @@ def build_solving_set(
     temp_in = np.log10(temp)
     vx_in = vx / 100 # divide by 100 km/s
     vy_in = vy / 100 # divide by 100 km/s
-    vz_in = vy / 100 # divide by 100 km/s
+    vz_in = vz / 100 # divide by 100 km/s
     ne_in = np.log10(ne)
     merged_input = np.stack(
         [

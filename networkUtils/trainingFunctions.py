@@ -37,12 +37,12 @@ def train(params, model, dataLoaders):
             print(f'Early stopping condition met, stopping at epoch {epoch}...')
             break
 
-        if model.complex_loss is True:
-            update_lambda(
-                criterion=model.loss_fxn,
-                reg_avg=loss2_running,
-                data_avg=loss1_running
-            )
+        # if model.complex_loss is True:
+        #     update_lambda(
+        #         criterion=model.loss_fxn,
+        #         reg_avg=loss2_running,
+        #         data_avg=loss1_running
+        #     )
             
     return loss_dict
 
@@ -146,7 +146,7 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
             )
 
             loss1_running += components['data'].item()
-            loss2_running += components['regularization'].item()
+            loss2_running += components['source'].item()
 
         else:
             batch_loss = model.loss_fxn(y_pred, y_true)

@@ -417,6 +417,7 @@ class NLTECompositeLoss(nn.Module):
         wave_angstrom,
         data_loss_func,
         lam=1e-1,
+        lam_S=1,
         min_stride=2,
         max_frac=0.25,
         delta=1e-1,
@@ -450,6 +451,7 @@ class NLTECompositeLoss(nn.Module):
         )
 
         self.lam = lam
+        self.lam_S = lam_S
         self.min_stride = min_stride
         self.max_frac = max_frac
         self.delta = delta
@@ -482,7 +484,7 @@ class NLTECompositeLoss(nn.Module):
             _nan_stats(L_data, "L_data")
 
         # ------------------ PHYSICS ------------------ #
-        S, x = compute_Sv_all_lines_T_batched(
+        S_pred, x_pred = compute_Sv_all_lines_T_batched(
             T=T,
             logb=logb_pred,
             chi=self.chi,
@@ -493,6 +495,25 @@ class NLTECompositeLoss(nn.Module):
             debug_report="most_negative",   # or "first"
             return_x=True
         )
+
+        with torch.no_grad():
+            S_true, _ = compute_Sv_all_lines_T_batched(
+                T=T,
+                logb=logb_true,
+                chi=self.chi,
+                lines=self.lines,
+                nu=self.nu,
+                K_prefactor=self.K_prefactor,
+                debug=False,
+                return_x=True
+            )
+
+        logS_pred = torch.log10(torch.clamp(S_pred, min=1e-30))
+        logS_true = torch.log10(torch.clamp(S_true, min=1e-30))
+
+        data_loss_S = self.data_loss(logS_pred, logS_true)
+
+        L_S = self.lam_S * data_loss_S
 
         # S must be positive for log10
         # ---------- PHYSICAL SANITY CHECK ----------
@@ -517,22 +538,22 @@ class NLTECompositeLoss(nn.Module):
         # if self.debug and not self._debug_triggered:
             # _nan_stats(logS, "log10(S)")
 
-        x_fluct = x - x.mean(dim=-1, keepdim=True)
+        # x_fluct = x_pred - x_pred.mean(dim=-1, keepdim=True)
 
-        # ------------------ REGULARIZATION ------------------ #
-        L_reg = zigzag_regularizer_Sv_batched(
-            x_fluct,
-            lam=self.lam,
-            min_stride=self.min_stride,
-            max_frac=self.max_frac,
-            delta=self.delta
-        )
+        # # ------------------ REGULARIZATION ------------------ #
+        # L_reg = zigzag_regularizer_Sv_batched(
+        #     x_fluct,
+        #     lam=self.lam,
+        #     min_stride=self.min_stride,
+        #     max_frac=self.max_frac,
+        #     delta=self.delta
+        # )
 
-        if self.debug and not self._debug_triggered:
-            _nan_stats(L_reg, "L_reg")
+        # if self.debug and not self._debug_triggered:
+        #     _nan_stats(L_reg, "L_reg")
 
         # ------------------ TOTAL ------------------ #
-        L_total = L_data + L_reg
+        L_total = L_data + L_S  # + L_reg
 
         if self.debug and not self._debug_triggered:
             if torch.isnan(L_total):
@@ -542,8 +563,10 @@ class NLTECompositeLoss(nn.Module):
         if self.return_components:
             return L_total, {
                 "data": L_data.detach(),
-                "regularization": L_reg.detach(),
-                "lambda": self.lam
+                "source": L_S.detach(),
+                # "regularization": L_reg.detach(),
+                # "lambda_reg": self.lam,
+                # "lambda_source": self.lam_S
             }
         else:
             return L_total
