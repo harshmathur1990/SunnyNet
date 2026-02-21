@@ -496,7 +496,7 @@ class NLTECompositeLoss(nn.Module):
             return_x=True
         )
 
-        S_true, _ = compute_Sv_all_lines_T_batched(
+        S_true, x_true = compute_Sv_all_lines_T_batched(
             T=T,
             logb=logb_true,
             chi=self.chi,
@@ -507,12 +507,12 @@ class NLTECompositeLoss(nn.Module):
             return_x=True
         )
 
-        logS_pred = torch.log10(torch.clamp(S_pred, min=1e-30))
-        logS_true = torch.log10(torch.clamp(S_true, min=1e-30))
+        # logS_pred = torch.log10(torch.clamp(S_pred, min=1e-30))
+        # logS_true = torch.log10(torch.clamp(S_true, min=1e-30))
 
-        data_loss_S = self.data_loss(logS_pred, logS_true)
+        data_loss_S = self.data_loss(x_pred, x_true)
 
-        L_S = self.lam_S * data_loss_S
+        L_S = data_loss_S
 
         # S must be positive for log10
         # ---------- PHYSICAL SANITY CHECK ----------
