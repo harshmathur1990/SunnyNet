@@ -14,7 +14,7 @@ MULTI3D_PATH = "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion_h6_252_3d
 MULTI3D_ATMOS = "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/atm3d.en024048_hion"
 
 NDEP = 400
-PAD = 1
+PAD = 2
 WINDOW = 2 * PAD + 1
 TAG = f"{WINDOW}x{WINDOW}"
 

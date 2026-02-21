@@ -304,7 +304,7 @@ def sunnynet_train_model(train_path, save_folder, save_file, model_type='SunnyNe
         'data_path': train_path,
         'save_folder': save_folder,
         'model_save': save_file,
-        'early_stopping': 5, # iterations without lower loss before breaking training loop
+        'early_stopping': 10, # iterations without lower loss before breaking training loop
         'num_epochs': 50,    # training epochs
         'train_size': train_size, # manually calculate from your train / test split
         'batch_size_train': 128,
