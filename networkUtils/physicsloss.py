@@ -552,7 +552,7 @@ class NLTECompositeLoss(nn.Module):
         #     _nan_stats(L_reg, "L_reg")
 
         # ------------------ TOTAL ------------------ #
-        L_total = L_S  # + L_reg
+        L_total = L_data + L_S  # + L_reg
 
         if self.debug and not self._debug_triggered:
             if torch.isnan(L_total):
