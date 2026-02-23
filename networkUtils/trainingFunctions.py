@@ -20,7 +20,7 @@ def train(params, model, dataLoaders):
         ## eval forward ##
         with torch.no_grad():
             model.network.eval()
-            val_loss, _, _ = run_epoch('val', model, epoch, dataLoaders)
+            val_loss, _, _, _ = run_epoch('val', model, epoch, dataLoaders)
             loss_dict['val'].append(val_loss)
         
         ## check los ##
