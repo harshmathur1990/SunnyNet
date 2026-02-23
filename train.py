@@ -69,7 +69,7 @@ levels = [
 atom_names = ["H", "CA"]
 
 NDEP = 400
-PAD = 2
+PAD = 1
 WINDOW = 2 * PAD + 1
 TAG = f"{WINDOW}x{WINDOW}"
 
@@ -242,7 +242,7 @@ def predict():
 # ------------------------------------------------------------
 def main():
 
-    m3d, atmos, rho, z, temp, vx, vy, vz, ne, lte, nlte = load_multi3d()
+    atmos, rho, z, temp, vx, vy, vz, ne, lte, nlte = load_multi3d()
 
     # ---- TRAINING ----
     if not os.path.exists(TRAIN_FILE):
