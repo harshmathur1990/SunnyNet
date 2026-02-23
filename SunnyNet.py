@@ -242,8 +242,20 @@ def check_model_compat(model_type, pad):
         return False
 
 
-def sunnynet_train_model(train_path, save_folder, save_file, model_type='SunnyNet_3x3',
-                         loss_function='MSELoss', cuda=True, multi_gpu=False):
+def sunnynet_train_model(
+    train_path,
+    save_folder,
+    save_file,
+    lines,
+    wave,
+    chi,
+    levels,
+    atom_names,
+    model_type='SunnyNet_3x3',
+    loss_function='MSELoss',
+    cuda=True,
+    multi_gpu=False
+):
     """
     Trains a SunnyNet neural network model to be used to predict non-LTE populations.
     Needs a "train" file prepared with build_training_set(). Common options can
@@ -297,7 +309,12 @@ def sunnynet_train_model(train_path, save_folder, save_file, model_type='SunnyNe
         'out_channels': out_channels,
         'features': ndep,
         'cuda': {'use_cuda': cuda, 'multi_gpu': multi_gpu},
-        'mode': 'training'
+        'mode': 'training',
+        'lines': lines,
+        'wave': wave,
+        'chi': chi,
+        'levels': levels,
+        'atom_names': atom_names
     }
     # training configuration 
     config = {

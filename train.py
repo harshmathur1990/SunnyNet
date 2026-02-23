@@ -10,8 +10,63 @@ from scipy.interpolate import interp1d
 # ------------------------------------------------------------
 # CONFIG
 # ------------------------------------------------------------
-MULTI3D_PATH = "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion_h6_252_3d_output"
-MULTI3D_ATMOS = "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/atm3d.en024048_hion"
+MULTI3D_TRAINING_DATA = [
+    {
+        "MULTI3D_PATHS": [
+             "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion_h6_252_3d_output",
+             "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion_ca2_252_3d_output"
+        ],
+        "MULTI3D_ATMOS": "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/atm3d.en024048_hion",
+    }
+]
+
+lines = [
+    np.array(
+        [(0,1), (0,2), (0, 3), (0, 4), (1,2), (1,3), (1, 4), (2,3), (2, 4), (3, 4)],
+        dtype=np.float32
+    ),
+    np.array(
+        [(0, 3), (0, 4), (1, 3), (1, 4), (2, 4)],
+        dtype=np.float32
+    )
+]
+
+wave = [
+    np.array([1215.6701, 1025.7220, 972.53650, 949.74287, 6562.79, 4861.35, 4340.472, 18750, 12820, 40510],
+        dtype=np.float32
+    ),
+    np.array([3968.47, 3933.66, 8662.14, 8498.02, 8542.09],
+        dtype=np.float32
+    )
+]
+
+chi = [
+    np.array(
+        [
+            1.6339941854018686e-18,
+            1.936585907218822e-18,
+            2.0424878450955273e-18,
+            2.091506177644877e-18,
+            2.1802152677122893e-18
+        ],
+        dtype=np.float32
+    ),
+    np.array(
+        [
+            2.7115478588655445e-19,
+            2.7235960502783243e-19,
+            5.004162033597224e-19,
+            5.048445871090645e-19,
+            1.902059054757628e-18
+        ],
+        dtype=np.float32
+    )
+]
+
+levels = [
+]
+
+atom_names = ["H", "CA"]
 
 NDEP = 400
 PAD = 2
@@ -56,29 +111,61 @@ def interpolate_everything(rho_arr, z_scale, pops_array, new_cmass_scale):
 # ------------------------------------------------------------
 def load_multi3d():
 
+    global levels
+
     print("\n=== LOADING MULTI3D DATA ===")
 
-    m3d = Multi3dOut(directory=MULTI3D_PATH)
-    m3d.readall()
+    lte_all = None
+    nlte_all = None
 
-    lte_pops = m3d.atom.nstar * 1e6  # cm^-3 to m^-3
-    nlte_pops = m3d.atom.n * 1e6  # cm^-3 to m^-3
+    atmos = None
+    rho = z_scale = temp = vx = vy = vz = ne = None
 
-    nx, ny, nz, nlevel = m3d.atom.nstar.shape
-    atmos = Multi3dAtmos(MULTI3D_ATMOS, nx, ny, nz)
+    for dataset in MULTI3D_TRAINING_DATA:
 
-    rho = atmos.rho * 1e3  #  g cm-3 to kg m-3
-    z_scale = m3d.geometry.z * 1e-2  #  g cm-3 to kg m-3
+        atmos_path = dataset["MULTI3D_ATMOS"]
 
-    temp = atmos.temp
-    vx = atmos.vx   # km s-1
-    vy = atmos.vy   # km s-1
-    vz = atmos.vz   # km s-1
-    ne = atmos.ne * 1e6  #  cm-3 to m-3
+        for i, mpath in enumerate(dataset["MULTI3D_PATHS"]):
 
-    print("Grid:", nx, ny, nz, "levels:", nlevel)
+            print(f"\n--- Reading MULTI3D output: {mpath}")
 
-    return m3d, atmos, rho, z_scale, temp, vx, vy, vz, ne, lte_pops, nlte_pops
+            m3d = Multi3dOut(directory=mpath)
+            m3d.readall()
+
+            # --- populations ---
+            lte = m3d.atom.nstar * 1e6   # cm^-3 → m^-3
+            nlte = m3d.atom.n * 1e6
+
+            levels.append(
+                nlte.shape[-1]
+            )
+
+            # concatenate over level axis
+            if lte_all is None:
+                lte_all = lte
+                nlte_all = nlte
+            else:
+                lte_all  = np.concatenate([lte_all,  lte],  axis=-1)
+                nlte_all = np.concatenate([nlte_all, nlte], axis=-1)
+
+            # --- load atmos only once per dataset block ---
+            if atmos is None:
+                nx, ny, nz, _ = lte.shape
+                atmos = Multi3dAtmos(atmos_path, nx, ny, nz)
+
+                rho = atmos.rho * 1e3        # g cm-3 → kg m-3
+                temp = atmos.temp
+                vx = atmos.vx
+                vy = atmos.vy
+                vz = atmos.vz
+                ne = atmos.ne * 1e6          # cm-3 → m-3
+                z_scale = m3d.geometry.z * 1e-2   # cm → m
+
+    print("Grid:", nx, ny, nz)
+    print("Total levels after concat:", lte_all.shape[-1])
+
+    return atmos, rho, z_scale, temp, vx, vy, vz, ne, lte_all, nlte_all
+
 
 # ------------------------------------------------------------
 # STEP 2: BUILD TRAINING SET
@@ -108,9 +195,15 @@ def train_model():
         TRAIN_FILE,
         MODEL_DIR,
         MODEL_FILE,
+        lines=lines,
+        wave=wave,
+        chi=chi,
+        levels=levels,
+        atom_names=atom_names,
         model_type=MODEL_TYPE,
         cuda=True,
-        loss_function="PhysicsLoss"
+        loss_function="PhysicsLoss",
+
     )
 
 # ------------------------------------------------------------
@@ -143,29 +236,6 @@ def predict():
         loss_function="PhysicsLoss"
     )
 
-# ------------------------------------------------------------
-# STEP 6: OPTIONAL DIAGNOSTICS
-# ------------------------------------------------------------
-def diagnostics(m3d, atmos, rho, z):
-
-    print("\n=== RUNNING DIAGNOSTICS ===")
-
-    f = h5py.File(OUTPUT_FILE, "r")
-    print("Output keys:", list(f.keys()))
-    print("Pop shape:", f["populations"].shape)
-
-    dep = m3d.atom.nstar / m3d.atom.n
-    new_cmass_scale = np.logspace(-6, 2, NDEP)
-
-    departure = interpolate_everything(rho, z, dep, new_cmass_scale)
-    temperature = interpolate_everything(
-        rho, z,
-        atmos.temp[..., np.newaxis],
-        new_cmass_scale
-    )[..., 0]
-
-    print("Interpolated temp shape:", temperature.shape)
-    print("Interpolated dep shape:", departure.shape)
 
 # ------------------------------------------------------------
 # MAIN

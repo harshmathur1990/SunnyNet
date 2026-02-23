@@ -10,27 +10,6 @@ c  = np.float32(2.99792458e8)
 kB = np.float32(1.380649e-23)
 
 
-lines = np.array(
-    [(0,1), (0,2), (0, 3), (0, 4), (1,2), (1,3), (1, 4), (2,3), (2, 4), (3, 4)],
-    dtype=np.float32
-)
-
-
-wave = np.array([1215.6701, 1025.7220, 972.53650, 949.74287, 6562.79, 4861.35, 4340.472, 18750, 12820, 40510], dtype=np.float32)
-
-
-chi = np.array(
-    [
-        1.6339941854018686e-18,
-        1.936585907218822e-18,
-        2.0424878450955273e-18,
-        2.091506177644877e-18,
-        2.1802152677122893e-18
-    ],
-    dtype=np.float32
-)
-
-
 def _nan_stats(x, name):
     if not torch.is_tensor(x):
         return
@@ -414,8 +393,10 @@ class NLTECompositeLoss(nn.Module):
         self,
         chi,
         lines,
-        wave_angstrom,
+        wave,
+        levels,
         data_loss_func,
+        atom_names=["H", "Ca"], 
         lam=1e-1,
         lam_S=1e-2,
         min_stride=2,
@@ -428,27 +409,30 @@ class NLTECompositeLoss(nn.Module):
 
         self.data_loss = data_loss_func
 
-        self.register_buffer(
-            "chi",
-            torch.tensor(chi, dtype=torch.float32)
+        self.chi = nn.ParameterList(
+            [nn.Parameter(torch.tensor(c, dtype=torch.float32), requires_grad=False) for c in chi]
         )
 
-        self.register_buffer(
-            "lines",
-            torch.tensor(lines, dtype=torch.long)
+        self.lines = nn.ParameterList(
+            [nn.Parameter(torch.tensor(l, dtype=torch.long), requires_grad=False) for l in lines]
         )
 
-        nu = c_AHz / np.array(wave_angstrom)
-
-        self.register_buffer(
-            "nu",
-            torch.tensor(nu, dtype=torch.float32)
+        self.nu = nn.ParameterList(
+            [nn.Parameter(torch.tensor(c_AHz / np.array(w), dtype=torch.float32), requires_grad=False) for w in wave]
         )
 
-        self.register_buffer(
-            "K_prefactor",
-            torch.tensor((2.0 * h * nu/ (c**2)) * nu * nu, dtype=torch.float32)
+        self.K_prefactor = nn.ParameterList(
+            [
+                nn.Parameter(
+                    torch.tensor((2.0*h*(c_AHz/np.array(w))/(c**2)) * (c_AHz/np.array(w))**2,
+                    dtype=torch.float32),
+                    requires_grad=False
+                )
+                for w in wave
+            ]
         )
+
+        self.register_buffer("levels", torch.tensor(levels, dtype=torch.long))
 
         self.lam = lam
         self.lam_S = lam_S
@@ -460,12 +444,25 @@ class NLTECompositeLoss(nn.Module):
         self.debug = debug
         self._debug_triggered = False  # print once
 
+        if atom_names is None:
+            atom_names = [f"A{i}" for i in range(len(levels))]
+
+        if len(atom_names) != len(levels):
+            raise ValueError("atom_names must match number of atoms")
+
+        self.atom_names = atom_names
+
     def forward(
         self,
         T,
         logb_pred,
         logb_true
     ):
+
+        if logb_pred.shape[1] != int(self.levels.sum()):
+            raise ValueError(
+                f"logb has {logb_pred.shape[1]} levels but expected {int(self.levels.sum())}"
+            )
 
         # ------------------ INPUT VALIDATION ------------------ #
         if self.debug and not self._debug_triggered:
@@ -484,74 +481,75 @@ class NLTECompositeLoss(nn.Module):
             _nan_stats(L_data, "L_data")
 
         # ------------------ PHYSICS ------------------ #
-        S_pred, x_pred = compute_Sv_all_lines_T_batched(
-            T=T,
-            logb=logb_pred,
-            chi=self.chi,
-            lines=self.lines,
-            nu=self.nu,
-            K_prefactor=self.K_prefactor,
-            debug=self.debug and not self._debug_triggered,
-            debug_report="most_negative",   # or "first"
-            return_x=True
-        )
+        per_atom_source_losses = []
+        per_atom_debug = []
 
-        S_true, x_true = compute_Sv_all_lines_T_batched(
-            T=T,
-            logb=logb_true,
-            chi=self.chi,
-            lines=self.lines,
-            nu=self.nu,
-            K_prefactor=self.K_prefactor,
-            debug=False,
-            return_x=True
-        )
+        level_offsets = torch.zeros(len(self.levels)+1, device=logb_pred.device, dtype=torch.long)
+        level_offsets[1:] = torch.cumsum(self.levels, dim=0)
 
-        # logS_pred = torch.log10(torch.clamp(S_pred, min=1e-30))
-        # logS_true = torch.log10(torch.clamp(S_true, min=1e-30))
+        # Example:
+        # levels = [6,7]
+        # offsets = [0,6,13]
 
-        data_loss_S = self.data_loss(x_pred, x_true)
+        for i in range(len(self.levels)):
 
-        L_S = data_loss_S
+            start = level_offsets[i]
+            end   = level_offsets[i+1]
 
-        # S must be positive for log10
-        # ---------- PHYSICAL SANITY CHECK ----------
-        if self.debug and not self._debug_triggered:
-            if (S <= 0).any() or (~torch.isfinite(S)).any():
-                print("[PHYSICS ERROR] S_nu <= 0 detected")
+            logb_pred_atom = logb_pred[:, start:end, :]
+            logb_true_atom = logb_true[:, start:end, :]
 
-                _range_stats(T, "T")
-                _range_stats(logb_pred, "logb_pred")
-                _range_stats(logb_true, "logb_true")
-                _range_stats(S, "S_nu")
-                _range_stats(x, 'x')
+            chi_i   = self.chi[i]
+            lines_i = self.lines[i]
+            nu_i    = self.nu[i]
+            pref_i  = self.K_prefactor[i]
 
-                # Optional: identify worst offender
-                idx = torch.argmin(S)
-                print(f"[PHYSICS ERROR] Most negative S_nu value = {S.flatten()[idx].item():.3e}")
+            # ---- predicted source ----
+            S_pred, x_pred = compute_Sv_all_lines_T_batched(
+                T=T,
+                logb=logb_pred_atom,
+                chi=chi_i,
+                lines=lines_i,
+                nu=nu_i,
+                K_prefactor=pref_i,
+                debug=self.debug and not self._debug_triggered,
+                return_x=True
+            )
 
-                self._debug_triggered = True
+            # ---- true source ----
+            S_true, x_true = compute_Sv_all_lines_T_batched(
+                T=T,
+                logb=logb_true_atom,
+                chi=chi_i,
+                lines=lines_i,
+                nu=nu_i,
+                K_prefactor=pref_i,
+                debug=False,
+                return_x=True
+            )
 
-        # logS = torch.log10(torch.clamp(S, min=1e-30))
+            # ---- store loss, do NOT sum yet ----
+            L_atom = self.data_loss(x_pred, x_true)
 
-        # if self.debug and not self._debug_triggered:
-            # _nan_stats(logS, "log10(S)")
+            if not torch.isfinite(L_atom):
+                print(f"[PHYSICS WARNING] Atom {i} produced non-finite loss: {L_atom.item()}")
 
-        # x_fluct = x_pred - x_pred.mean(dim=-1, keepdim=True)
+            per_atom_source_losses.append(L_atom)
 
-        # # ------------------ REGULARIZATION ------------------ #
-        # L_reg = zigzag_regularizer_Sv_batched(
-        #     x_fluct,
-        #     lam=self.lam,
-        #     min_stride=self.min_stride,
-        #     max_frac=self.max_frac,
-        #     delta=self.delta
-        # )
-
-        # if self.debug and not self._debug_triggered:
-        #     _nan_stats(L_reg, "L_reg")
+            if self.debug and not self._debug_triggered:
+                per_atom_debug.append({
+                    "atom_index": i,
+                    "levels": int(end - start),
+                    "loss": float(L_atom.detach().cpu())
+                })
 
         # ------------------ TOTAL ------------------ #
+
+        # stack losses so you can inspect them
+        L_S_atoms = torch.stack(per_atom_source_losses)   # shape = (Natoms,)
+
+        L_S = L_S_atoms.mean()
+
         L_total = L_data + L_S  # + L_reg
 
         if self.debug and not self._debug_triggered:
@@ -563,9 +561,8 @@ class NLTECompositeLoss(nn.Module):
             return L_total, {
                 "data": L_data.detach(),
                 "source": L_S.detach(),
-                # "regularization": L_reg.detach(),
-                # "lambda_reg": self.lam,
-                # "lambda_source": self.lam_S
+                "source_per_atom": L_S_atoms.detach(),
+                "atom_names": self.atom_names
             }
         else:
             return L_total

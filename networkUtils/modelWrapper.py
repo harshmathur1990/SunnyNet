@@ -111,10 +111,12 @@ class Model():
                 self.loss_fxn = nn.MSELoss()
             elif params['loss_fxn'] == 'PhysicsLoss':
                 self.loss_fxn = NLTECompositeLoss(
-                    chi=chi,
-                    lines=lines,
-                    wave_angstrom=wave,
+                    chi=params['chi'],
+                    lines=params['lines'],
+                    wave=params['wave'],
+                    levels=params['levels'],
                     data_loss_func=WeightedMSE(),
+                    atom_names=params['atom_names'],
                     debug=False
                 )
                 self.complex_loss = True
@@ -202,10 +204,12 @@ class Model():
                 self.loss_fxn = nn.MSELoss()
             elif params['loss_fxn'] == 'PhysicsLoss':
                 self.loss_fxn = NLTECompositeLoss(
-                    chi=chi,
-                    lines=lines,
-                    wave_angstrom=wave,
+                    chi=params['chi'],
+                    lines=params['lines'],
+                    wave=params['wave'],
+                    levels=params['levels'],
                     data_loss_func=WeightedMSE(),
+                    atom_names=params['atom_names'],
                     debug=False
                 )
                 self.complex_loss = True

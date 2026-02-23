@@ -15,7 +15,7 @@ def train(params, model, dataLoaders):
     for epoch in range(params['num_epochs']):
         ## train forwards ##
         model.network.train()
-        tr_loss, loss1_running, loss2_running = run_epoch('train', model, epoch, dataLoaders)
+        tr_loss, loss_data_running, loss_source_running, loss_source_atoms_running = run_epoch('train', model, epoch, dataLoaders)
         loss_dict['train'].append(tr_loss)
         ## eval forward ##
         with torch.no_grad():
@@ -36,13 +36,6 @@ def train(params, model, dataLoaders):
         if stop == True:
             print(f'Early stopping condition met, stopping at epoch {epoch}...')
             break
-
-        # if model.complex_loss is True:
-        #     update_lambda(
-        #         criterion=model.loss_fxn,
-        #         reg_avg=loss2_running,
-        #         data_avg=loss1_running
-        #     )
             
     return loss_dict
 
@@ -106,17 +99,18 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
     else:
         raise AttributeError('Currently only support models with square X/Y input dimmensions of: 1, 3, 5, 7')
            
-    epoch_loss = 0
-    loss1_running = 0.0
-    loss2_running = 0.0
+    epoch_loss = 0.0
+    loss_data_running = 0.0
+    loss_source_running = 0.0
+    loss_source_atoms_running = None   # will become tensor after first batch
 
     if verbose:
         print('-'*10, f'Epoch {cur_epoch}: {mode}', '-'*10)
 
-    if model.complex_loss is True:
-        desc = f"{mode.upper()} | Epoch {cur_epoch} | λ = {model.loss_fxn.lam:.2e}"
-    else:
-        desc = f"{mode.upper()} | Epoch {cur_epoch}"
+    # if model.complex_loss is True:
+    #     desc = f"{mode.upper()} | Epoch {cur_epoch} | λ = {model.loss_fxn.lam:.2e}"
+    # else:
+    desc = f"{mode.upper()} | Epoch {cur_epoch}"
 
     pbar = tqdm(
         dataLoaders[mode],
@@ -145,8 +139,17 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
                 y_true_squeezed
             )
 
-            loss1_running += components['data'].item()
-            loss2_running += components['source'].item()
+            # ---- accumulate main components ----
+            loss_data_running += components["data"].item()
+            loss_source_running += components["source"].item()
+
+            # ---- accumulate per-atom losses ----
+            atom_losses = components["source_per_atom"].detach().cpu()
+
+            if loss_source_atoms_running is None:
+                loss_source_atoms_running = torch.zeros_like(atom_losses)
+
+            loss_source_atoms_running += atom_lossess
 
         else:
             batch_loss = model.loss_fxn(y_pred, y_true)
@@ -154,27 +157,53 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
         # ------------ BACKWARD ------------ #
         if mode == 'train':
             model.optimizer.zero_grad()
-            batch_loss.backward(retain_graph=True)
+            batch_loss.backward()
             model.optimizer.step()
 
         epoch_loss += batch_loss.item()
 
         # update tqdm postfix (clean, no extra lines)
         if model.complex_loss is True:
-            pbar.set_postfix({
-                "L": f"{epoch_loss / (i + 1):.3e}",
-                "L1": f"{loss1_running / (i + 1):.3e}",
-                "L2": f"{loss2_running / (i + 1):.3e}"
-            })
+            postfix = {
+                "L":  f"{epoch_loss/(i+1):.3e}",
+                "Ld": f"{loss_data_running/(i+1):.3e}",
+                "Ls": f"{loss_source_running/(i+1):.3e}",
+            }
+
+            # add atom losses dynamically
+            if loss_source_atoms_running is not None:
+                avg_atoms = loss_source_atoms_running / (i+1)
+                atom_names = components.get("atom_names", None)
+
+                if atom_names is None:
+                    atom_names = [f"A{a}" for a in range(len(avg_atoms))]
+
+                for a, name in enumerate(atom_names):
+                    postfix[name] = f"{avg_atoms[a]:.2e}"
+
+            pbar.set_postfix(postfix)
 
         else:
             pbar.set_postfix(loss=f"{epoch_loss / (i + 1):.3e}")
 
+    n_batches = len(dataLoaders[mode])
+
     epoch_loss /= len(dataLoaders[mode])
-    loss1_running /= len(dataLoaders[mode])
-    loss2_running /= len(dataLoaders[mode])
+
+    if model.complex_loss:
+        loss_data_running /= n_batches
+        loss_source_running /= n_batches
+        loss_source_atoms_running /= n_batches
 
     print(f"TOTAL {mode.upper()} LOSS = {epoch_loss:.8f}")
 
-    return epoch_loss, loss1_running, loss2_running
+    if model.complex_loss:
+        return (
+            epoch_loss,
+            loss_data_running,
+            loss_source_running,
+            loss_source_atoms_running
+        )
+    else:
+        return epoch_loss, None, None, None
 
