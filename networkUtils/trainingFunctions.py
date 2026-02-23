@@ -149,7 +149,7 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
             if loss_source_atoms_running is None:
                 loss_source_atoms_running = torch.zeros_like(atom_losses)
 
-            loss_source_atoms_running += atom_lossess
+            loss_source_atoms_running += atom_losses
 
         else:
             batch_loss = model.loss_fxn(y_pred, y_true)
