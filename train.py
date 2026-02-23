@@ -232,6 +232,11 @@ def predict():
         TRAIN_FILE,
         PREDICT_FILE,
         OUTPUT_FILE,
+        lines=lines,
+        wave=wave,
+        chi=chi,
+        levels=levels,
+        atom_names=atom_names,
         model_type=MODEL_TYPE,
         loss_function="PhysicsLoss"
     )

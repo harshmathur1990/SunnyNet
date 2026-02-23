@@ -364,8 +364,20 @@ def sunnynet_train_model(
             f.write(str(epoch_loss['train'][i]) + '   ' + str(epoch_loss['val'][i]) + '\n')
 
 
-def sunnynet_predict_populations(model_path, train_path, test_path, save_path, 
-                                 cuda=True, model_type='SunnyNet_3x3', loss_function='MSELoss'):
+def sunnynet_predict_populations(
+    model_path,
+    train_path,
+    test_path,
+    save_path,
+    lines,
+    wave,
+    chi,
+    levels,
+    atom_names, 
+    cuda=True,
+    model_type='SunnyNet_3x3',
+    loss_function='MSELoss'
+):
     """
     Predicts non-LTE populations using SunnyNet, using an existing trained set,
     model data, and input LTE populations pre-prepared with build_solving_set()
@@ -425,6 +437,11 @@ def sunnynet_predict_populations(model_path, train_path, test_path, save_path,
         'multi_gpu_train': False,
         'loss_fxn': loss_function,
         'output_XY': nx,  # number of pixels in horizontal dimensions
+        'lines': lines,
+        'wave': wave,
+        'chi': chi,
+        'levels': levels,
+        'atom_names': atom_names
     }
     populations = predict_populations(test_path, train_path, pred_config)
     new_cmass_scale = np.logspace(-6, 2, 400)
