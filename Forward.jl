@@ -440,7 +440,7 @@ end
 function synthesize_intensity_3d(
     atms::Atmosphere3D, h_atom,
     line_index::Int,
-    nltepops_nz_nx_ny_nlev
+    nltepops_nz_nx_ny_nlev,
     lower_level::Int,
     upper_level::Int;
     voigt_cfg=(a_min=1f-4,a_max=1f1,a_n=20000,v_min=0f0,v_max=5f2,v_n=2500)
