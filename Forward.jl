@@ -43,6 +43,9 @@
 #     named by --pred_key (default: "populations").
 # -----------------------------------------------------------------------------
 
+ENV["GKSwstype"] = "100"     # file / offscreen
+ENV["GKS_WSTYPE"] = "100"    # some setups use this spelling
+
 using Muspel
 using StaticArrays
 using AtomicData
@@ -51,6 +54,8 @@ using ProgressMeter
 using Base.Threads
 using Interpolations
 using Plots
+gr()                         # ensure GR backend
+default(show=false)
 
 
 # ============================================================
@@ -435,7 +440,7 @@ end
 function synthesize_intensity_3d(
     atms::Atmosphere3D, h_atom,
     line_index::Int,
-    nltepops_nz_nx_ny_nlev,
+    nltepops_nz_nx_ny_nlev
     lower_level::Int,
     upper_level::Int;
     voigt_cfg=(a_min=1f-4,a_max=1f1,a_n=20000,v_min=0f0,v_max=5f2,v_n=2500)
@@ -683,8 +688,8 @@ function main()
             h_atom,
             a.line_index,
             nlte_atoms[a.name],
-            lower_level = a.lower_level,
-            upper_level = a.upper_level;
+            a.lower_level,
+            a.upper_level;
             voigt_cfg = cfg.voigt
         )
 
