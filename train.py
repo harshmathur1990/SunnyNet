@@ -203,8 +203,8 @@ def load_multi3d():
         vy_list,
         vz_list,
         ne_list,
-        lte_all,
-        nlte_all,
+        lte_blocks,
+        nlte_blocks,
     )
 
 
