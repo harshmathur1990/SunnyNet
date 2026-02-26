@@ -216,9 +216,9 @@ def build_training(temp, vx, vy, vz, ne, lte, nlte, rho, z):
     print("\n=== BUILD TRAINING SET ===")
 
     SunnyNet.build_training_set(
-        [temp], [vx], [vy], [vz],
-        [ne], [lte], [nlte],
-        [rho], [z],
+        temp, vx, vy, vz,
+        ne, lte, nlte,
+        rho, z,
         save_path=TRAIN_FILE,
         ndep=NDEP,
         pad=PAD,
