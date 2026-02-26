@@ -119,59 +119,100 @@ def interpolate_everything(rho_arr, z_scale, pops_array, new_cmass_scale):
 def load_multi3d():
 
     global levels
-
     print("\n=== LOADING MULTI3D DATA ===")
 
-    lte_all = None
-    nlte_all = None
-
-    atmos = None
-    rho = z_scale = temp = vx = vy = vz = ne = None
+    atmos_list = []
+    rho_list = []
+    z_list = []
+    temp_list = []
+    vx_list = []
+    vy_list = []
+    vz_list = []
+    ne_list = []
+    lte_blocks = []
+    nlte_blocks = []
 
     for dataset in MULTI3D_TRAINING_DATA:
 
+        print(f"\n=== DATASET BLOCK ===")
+
+        lte_block = None
+        nlte_block = None
+        atmos = None
+
         atmos_path = dataset["MULTI3D_ATMOS"]
 
-        for i, mpath in enumerate(dataset["MULTI3D_PATHS"]):
+        for mpath in dataset["MULTI3D_PATHS"]:
 
             print(f"\n--- Reading MULTI3D output: {mpath}")
 
             m3d = Multi3dOut(directory=mpath)
             m3d.readall()
 
-            # --- populations ---
-            lte = m3d.atom.nstar * 1e6   # cm^-3 → m^-3
+            lte = m3d.atom.nstar * 1e6
             nlte = m3d.atom.n * 1e6
 
-            levels.append(
-                nlte.shape[-1]
-            )
+            levels.append(nlte.shape[-1])
 
-            # concatenate over level axis
-            if lte_all is None:
-                lte_all = lte
-                nlte_all = nlte
+            # concatenate only inside block
+            if lte_block is None:
+                lte_block = lte
+                nlte_block = nlte
             else:
-                lte_all  = np.concatenate([lte_all,  lte],  axis=-1)
-                nlte_all = np.concatenate([nlte_all, nlte], axis=-1)
+                lte_block  = np.concatenate([lte_block,  lte],  axis=-1)
+                nlte_block = np.concatenate([nlte_block, nlte], axis=-1)
 
-            # --- load atmos only once per dataset block ---
+            # Load atmos once per block
             if atmos is None:
                 nx, ny, nz, _ = lte.shape
                 atmos = Multi3dAtmos(atmos_path, nx, ny, nz)
 
-                rho = atmos.rho * 1e3        # g cm-3 → kg m-3
+                # IMPORTANT: some Multi3dAtmos need readall()
+                if hasattr(atmos, "readall"):
+                    atmos.readall()
+
+                rho = atmos.rho * 1e3
                 temp = atmos.temp
                 vx = atmos.vx
                 vy = atmos.vy
                 vz = atmos.vz
-                ne = atmos.ne * 1e6          # cm-3 → m-3
-                z_scale = m3d.geometry.z * 1e-2   # cm → m
+                ne = atmos.ne * 1e6
+                z_scale = m3d.geometry.z * 1e-2
 
-    print("Grid:", nx, ny, nz)
-    print("Total levels after concat:", lte_all.shape[-1])
+        print("Block total levels:", lte_block.shape[-1])
 
-    return atmos, rho, z_scale, temp, vx, vy, vz, ne, lte_all, nlte_all
+        # store this block
+        lte_blocks.append(lte_block)
+        nlte_blocks.append(nlte_block)
+
+        atmos_list.append(atmos)
+        rho_list.append(rho)
+        temp_list.append(temp)
+        vx_list.append(vx)
+        vy_list.append(vy)
+        vz_list.append(vz)
+        ne_list.append(ne)
+        z_list.append(z_scale)
+
+    # stack blocks along new first axis
+    lte_all = np.stack(lte_blocks, axis=0)
+    nlte_all = np.stack(nlte_blocks, axis=0)
+
+    print("Final shape:", lte_all.shape)
+    print("Levels per block:", lte_all.shape[-1])
+
+    return (
+        atmos_list,
+        rho_list,
+        z_list,
+        temp_list,
+        vx_list,
+        vy_list,
+        vz_list,
+        ne_list,
+        lte_all,
+        nlte_all,
+    )
 
 
 # ------------------------------------------------------------
