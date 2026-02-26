@@ -13,10 +13,17 @@ from scipy.interpolate import interp1d
 MULTI3D_TRAINING_DATA = [
     {
         "MULTI3D_PATHS": [
-             "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion_h6_252_3d_output",
-             "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion_ca2_252_3d_output"
+             "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/H",
+             "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/CA"
         ],
-        "MULTI3D_ATMOS": "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/atm3d.en024048_hion",
+        "MULTI3D_ATMOS": "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/atm",
+    },
+    {
+        "MULTI3D_PATHS": [
+             "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/386/H",
+             "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/386/CA"
+        ],
+        "MULTI3D_ATMOS": "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/386/atm",
     }
 ]
 
