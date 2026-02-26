@@ -132,7 +132,7 @@ def load_multi3d():
     lte_blocks = []
     nlte_blocks = []
 
-    for dataset in MULTI3D_TRAINING_DATA:
+    for dataset_idx, dataset in enumerate(MULTI3D_TRAINING_DATA):
 
         print(f"\n=== DATASET BLOCK ===")
 
@@ -152,7 +152,8 @@ def load_multi3d():
             lte = m3d.atom.nstar * 1e6
             nlte = m3d.atom.n * 1e6
 
-            levels.append(nlte.shape[-1])
+            if dataset_idx == 0:
+                levels.append(nlte.shape[-1])
 
             # concatenate only inside block
             if lte_block is None:
