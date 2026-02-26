@@ -127,11 +127,11 @@ def interpolate_everything(rho_arr, z_scale, pops_array, new_cmass_scale):
 def read_mesh(mesh_file):
     """
     Reads mesh file from Bifrost or MULTI3D.
-    Returns: nx, ny, nz, x, y, z
+    Equivalent to Julia read_mesh().
     """
 
-    # Load everything as flat float array
-    tmp = np.loadtxt(mesh_file, dtype=np.float32).flatten()
+    # Read ALL whitespace-separated numbers
+    tmp = np.fromfile(mesh_file, sep=" ", dtype=np.float32)
 
     inc = 0
 
