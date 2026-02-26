@@ -194,13 +194,6 @@ def load_multi3d():
         ne_list.append(ne)
         z_list.append(z_scale)
 
-    # stack blocks along new first axis
-    lte_all = np.stack(lte_blocks, axis=0)
-    nlte_all = np.stack(nlte_blocks, axis=0)
-
-    print("Final shape:", lte_all.shape)
-    print("Levels per block:", lte_all.shape[-1])
-
     return (
         atmos_list,
         rho_list,
