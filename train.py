@@ -399,10 +399,12 @@ def main():
     if not os.path.exists(TRAIN_FILE):
         atmos, rho, z, temp, vx, vy, vz, ne, lte, nlte = load_training_multi3d_data()
         build_training(temp, vx, vy, vz, ne, lte, nlte, rho, z)
+        with h5py.File(TRAIN_FILE) as f:
+            print(f["lte training windows"].dtype)
 
     # ---- TRAIN MODEL ----
     ensure_levels_loaded()
-    
+
     if not os.path.exists(os.path.join(MODEL_DIR, MODEL_FILE)):
         train_model()
 

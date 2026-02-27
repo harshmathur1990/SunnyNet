@@ -50,7 +50,7 @@ def interpolate_everything(rho_xyz, z_scale, values_xyzq, new_cmass):
         signature="(n),(n),(n,o),(m)->(m,o)",
     )
 
-    return vec(rho_xyz, z_scale, values_xyzq, new_cmass)
+    return vec(rho_xyz, z_scale, values_xyzq, new_cmass).astype(np.float32, copy=False)
 
 
 # ============================================================
@@ -94,6 +94,8 @@ def _make_inputs_ch_first(
 
     features = np.transpose(features, (3, 2, 0, 1))
 
+    features = features.astype(np.float32, copy=False)
+
     return features, cmass_grid
 
 
@@ -114,6 +116,8 @@ def _make_targets_ch_first(
 
     dep = np.pad(dep, pad_cfg, mode="wrap")
     dep = np.transpose(dep, (3, 2, 0, 1))
+
+    dep = dep.astype(np.float32, copy=False)
 
     return dep
 
@@ -222,7 +226,7 @@ def build_solving_set(
     windows = []
     _extract_prediction_windows(inputs, windows, pad)
 
-    windows = np.asarray(windows)
+    windows = np.asarray(windows, dtype=np.float32)
 
     with h5py.File(save_path, "w") as f:
         d = f.create_dataset("lte test windows", data=windows)
