@@ -1,246 +1,350 @@
-# SunnyNet Utilities. Makes use of networkUtils for the heavy lifting.
+# ============================================================
+# SunnyNet Utilities
+# Public API CONTRACTS (DO NOT CHANGE SIGNATURES):
+#
+#   build_training_set
+#   build_solving_set
+#   sunnynet_train_model
+#   sunnynet_predict_populations
+#
+# ============================================================
 
-import numpy as np
-import h5py
 import os
 import sys
+import numpy as np
+import h5py
 import torch
+
 from torch.utils.data import DataLoader
 from scipy.interpolate import interp1d
 from scipy.integrate import cumulative_trapezoid as cumtrapz
+
 from networkUtils.atmosphereFunctions import predict_populations
 from networkUtils.modelWrapper import Model
 from networkUtils.dataSets import PopulationDataset3d
 from networkUtils.trainingFunctions import train
 
 
-def interpolate_everything(rho_super_arr, z_scale, pops_super_array, new_cmass_scale):
+# ============================================================
+# ---------------- INTERPOLATION ------------------------------
+# ============================================================
 
-    def iterpolate_data(rho_arr, z_scale, pops_array, new_cmass_scale):
-        cmass_arr = cumtrapz(rho_arr, -z_scale, initial=0)
-        interp_func = interp1d(
-            cmass_arr, pops_array,
-            kind='linear', axis=0, fill_value='extrapolate'
+def interpolate_everything(rho_xyz, z_scale, values_xyzq, new_cmass):
+    """
+    Vectorized interpolation onto common column-mass grid.
+    """
+
+    def interpolate_column(rho, z, values, new_scale):
+        cmass = cumtrapz(rho, -z, initial=0)
+        f = interp1d(
+            cmass,
+            values,
+            axis=0,
+            kind="linear",
+            fill_value="extrapolate",
         )
-        return interp_func(new_cmass_scale)
+        return f(new_scale)
 
-    vec_iterpolate_data = np.vectorize(iterpolate_data, signature='(n),(n),(n,o),(m)->(m,o)')
+    vec = np.vectorize(
+        interpolate_column,
+        signature="(n),(n),(n,o),(m)->(m,o)",
+    )
 
-    return vec_iterpolate_data(rho_super_arr, z_scale, pops_super_array, new_cmass_scale)
+    return vec(rho_xyz, z_scale, values_xyzq, new_cmass)
+
+
+# ============================================================
+# ---------------- PREPROCESSING ------------------------------
+# ============================================================
+
+def _prepare_input_features(temp, vx, vy, vz, ne):
+
+    return np.stack(
+        [
+            np.log10(temp),
+            vx / 100,
+            vy / 100,
+            vz / 100,
+            np.log10(ne),
+        ],
+        axis=-1,
+    )
+
+
+def _compute_departure_coefficients(lte, nlte):
+    return np.log10(nlte / lte)
+
+
+def _make_inputs_ch_first(
+    rho, z_scale,
+    temp, vx, vy, vz, ne,
+    *, ndep, pad
+):
+
+    cmass_grid = np.logspace(-6, 2, ndep)
+    pad_cfg = ((pad, pad), (pad, pad), (0, 0), (0, 0))
+
+    features = _prepare_input_features(temp, vx, vy, vz, ne)
+
+    features = interpolate_everything(
+        rho, z_scale, features, cmass_grid
+    )
+
+    features = np.pad(features, pad_cfg, mode="wrap")
+
+    features = np.transpose(features, (3, 2, 0, 1))
+
+    return features, cmass_grid
+
+
+def _make_targets_ch_first(
+    rho, z_scale,
+    lte, nlte,
+    *, ndep, pad
+):
+
+    cmass_grid = np.logspace(-6, 2, ndep)
+    pad_cfg = ((pad, pad), (pad, pad), (0, 0), (0, 0))
+
+    dep = _compute_departure_coefficients(lte, nlte)
+
+    dep = interpolate_everything(
+        rho, z_scale, dep, cmass_grid
+    )
+
+    dep = np.pad(dep, pad_cfg, mode="wrap")
+    dep = np.transpose(dep, (3, 2, 0, 1))
+
+    return dep
+
+
+# ============================================================
+# ---------------- WINDOW EXTRACTION --------------------------
+# ============================================================
+
+def _extract_prediction_windows(inputs, out, pad):
+
+    _, _, nxp, nyp = inputs.shape
+
+    for i in range(pad, nxp - pad):
+        for j in range(pad, nyp - pad):
+            out.append(
+                inputs[:, :, i-pad:i+pad+1,
+                             j-pad:j+pad+1]
+            )
+
+
+def _extract_training_windows(inputs, targets, win_out, tgt_out, pad):
+
+    _, _, nxp, nyp = inputs.shape
+
+    for i in range(pad, nxp - pad):
+        for j in range(pad, nyp - pad):
+
+            win_out.append(
+                inputs[:, :, i-pad:i+pad+1,
+                             j-pad:j+pad+1]
+            )
+
+            tgt_out.append(
+                targets[:, :, i, j][:, :, None, None]
+            )
+
+
+# ============================================================
+# ---------------- TRAIN / TEST SPLIT -------------------------
+# ============================================================
+
+def _train_test_split_global(windows, targets, tr_percent):
+
+    n = len(windows)
+    idx = np.arange(n)
+
+    ntrain = int(n * tr_percent / 100)
+
+    tr_idx = np.random.choice(idx, ntrain, replace=False)
+    val_idx = np.setxor1d(idx, tr_idx)
+
+    w = np.asarray(windows)
+    t = np.asarray(targets)
+
+    return w[tr_idx], t[tr_idx], w[val_idx], t[val_idx]
+
+
+def _save_training_hdf5(path, tr_w, tr_t, te_w, te_t):
+
+    with h5py.File(path, "w") as f:
+
+        d = f.create_dataset("lte training windows", data=tr_w)
+        d.attrs["len"] = len(tr_w)
+
+        f.create_dataset("non lte training points", data=tr_t)
+
+        d = f.create_dataset("lte test windows", data=te_w)
+        d.attrs["len"] = len(te_w)
+
+        f.create_dataset("non lte test points", data=te_t)
+
+
+# ============================================================
+# ---------------- SOLVING SET -------------------------------
+# ============================================================
+
+def _assert_square_domain(temp):
+    nx, ny, _ = temp.shape
+    if nx != ny:
+        raise ValueError(
+            f"SunnyNet requires square domain (nx={nx}, ny={ny})"
+        )
+    return nx
 
 
 def build_solving_set(
-    rho, z_scale, temp, vx,
-    vy, vz, ne,
+    rho, z_scale,
+    temp, vx, vy, vz, ne,
     save_path="example.hdf5",
-    ndep=400, pad=1
+    ndep=400,
+    pad=1,
 ):
-    """
-    Prepares populations from 3D simulation into a file to be fed into a trained network
-    to make population predictions.
 
-    Parameters
-    ----------
-    lte_pops : 4D array
-        Array with LTE populations. Shape should be (nx, ny, nz, nlevels),
-        units in m^-3.
-    rho_mean : 1D array
-        Array with horizontally-averaged mass density. Shape should be (nz,),
-        units in kg m^-3.
-    z_scale : 1D array
-        Height scale in m. First point should be top of atmosphere.
-    save_path : str
-        Name of file where the output will be written to.
-    ndep : int, optional
-        Number of output height points, to which the populations will be 
-        interpolated on a mean column mass scale. Does not need to be the
-        same as the input nz. Default is 400.
-    pad : int, optional
-        How many pixels to pad the each population column of interest in the
-        x and y dimensions. Should be consistent with the window size:
-        window size is 1 + 2*pad, so use pad=0 for 1x1, pad=1 for 3x3, 
-        and so on. Default is 1.
-    """
-    # check save path validity
     if os.path.isfile(save_path):
-        raise IOError("Output file already exists. Refusing to overwrite.")
-    # check sim dims and see whats gonna happen with interpolation
-    nx, ny, nz = temp.shape
-    print(f'Sim shape: ({nx}, {ny}, {nz})')
-    assert nx == ny, "Resizing function needs X / Y to be equal in length"
-    grid = nx + 2*pad  # account for padding periodic BC's
-    npad = ((pad,pad),(pad,pad),(0,0),(0,0))
-    new_cmass_scale = np.logspace(-6, 2, ndep)
-    temp_in = np.log10(temp)
-    vx_in = vx / 100 # divide by 100 km/s
-    vy_in = vy / 100 # divide by 100 km/s
-    vz_in = vz / 100 # divide by 100 km/s
-    ne_in = np.log10(ne)
-    merged_input = np.stack(
-        [
-            temp_in,
-            vx_in,
-            vy_in,
-            vz_in,
-            ne_in
-        ],
-        axis=-1
-    )
-    merged_input = interpolate_everything(rho, z_scale, merged_input, new_cmass_scale)
-    print('Padding for periodic boundary conditions...')
-    lte = np.pad(merged_input, pad_width=npad, mode='wrap')
-    print(f'LTE shape after padding: {lte.shape}')
-    print('Rearranging and taking Log10...')
-    lte = np.transpose(lte, (3,2,0,1))
-    print('Splitting into windows and columns...')
-    lte_list = []
-    for i in range(pad, grid - pad):
-        for j in range(pad, grid - pad):
-            sample = lte[:, :, i-pad:i+(pad+1), j-pad:j+(pad+1)]
-            lte_list.append(sample)
-    lte = np.array(lte_list)
-    print(f'Output shape {lte.shape}')
-    print(f'Saving into {save_path}...')
-    with h5py.File(save_path, 'w') as f:
-        dset1 = f.create_dataset("lte test windows", data=lte, dtype='f')
+        raise IOError("Output exists.")
 
+    nx = _assert_square_domain(temp)
+
+    inputs, _ = _make_inputs_ch_first(
+        rho, z_scale,
+        temp, vx, vy, vz, ne,
+        ndep=ndep,
+        pad=pad,
+    )
+
+    windows = []
+    _extract_prediction_windows(inputs, windows, pad)
+
+    windows = np.asarray(windows)
+
+    with h5py.File(save_path, "w") as f:
+        d = f.create_dataset("lte test windows", data=windows)
+
+        d.attrs["nx"] = nx
+        d.attrs["ndep"] = ndep
+        d.attrs["pad"] = pad
+
+
+# ============================================================
+# ---------------- TRAINING SET -------------------------------
+# ============================================================
 
 def build_training_set(
     temp_list, vx_list, vy_list, vz_list,
-    ne_list, lte_pops_list, nlte_pops_list,
-    rho_list, z_scale_list,
-    save_path="example.hdf5", ndep=400,
-    pad=1, tr_percent=85
+    ne_list, lte_list, nlte_list,
+    rho_list, z_list,
+    save_path="example.hdf5",
+    ndep=400,
+    pad=1,
+    tr_percent=85,
 ):
 
-    nx, ny, _, _ = lte_pops_list[0].shape
-    k = nx * ny  # number of training/validation instances combined (helps control output file size)
-    grid = nx + 2*pad  # accounts for expanding to include periodic BC's
-    npad = ((pad,pad),(pad,pad),(0,0),(0,0))
-    # check save path validity
     if os.path.isfile(save_path):
-        raise IOError("Output file already exists. Refusing to overwrite.")
-    lte_list = []
-    non_lte_list = []
+        raise IOError("Output exists.")
 
-    for temp_in, vx_in, vy_in, vz_in, ne_in, lte_in, nlte_in, rho_in, z_in in zip(
+    windows = []
+    targets = []
+
+    for temp, vx, vy, vz, ne, lte, nlte, rho, z in zip(
         temp_list, vx_list, vy_list, vz_list,
-        ne_list, lte_pops_list, nlte_pops_list,
-        rho_list, z_scale_list
+        ne_list, lte_list, nlte_list,
+        rho_list, z_list,
     ):
-        print(f'rho shape {rho_in.shape}')
-        print(f'z shape {z_in.shape}')
-        new_cmass_scale = np.logspace(-6, 2, ndep)
-        temp = np.log10(temp_in)
-        vx = vx_in / 100 # divide by 100 km/s
-        vy = vy_in / 100 # divide by 100 km/s
-        vz = vz_in / 100 # divide by 100 km/s
-        ne = np.log10(ne_in)
-        merged_input = np.stack(
-            [
-                temp,
-                vx,
-                vy,
-                vz,
-                ne
-            ],
-            axis=-1
-        )
-        departure_coeff = nlte_in / lte_in
-        departure_coeff = np.log10(departure_coeff)
-        merged_input = interpolate_everything(rho_in, z_in, merged_input, new_cmass_scale)
-        departure_coeff = interpolate_everything(rho_in, z_in, departure_coeff, new_cmass_scale)
-        print('Padding data...')
-        merged_input = np.pad(merged_input, pad_width=npad, mode='wrap')
-        departure_coeff = np.pad(departure_coeff, pad_width=npad, mode='wrap')
-        print('Log and transpose...')
-        merged_input = np.transpose(merged_input, (3,2,0,1))
-        departure_coeff = np.transpose(departure_coeff, (3,2,0,1))
-        print('Scaling data...')
-        print(f"Splitting simulation into corresponding window / columns...")
-        for i in range(pad, grid-pad):
-            for j in range(pad, grid-pad):
-                # lte window
-                sample = merged_input[:, :, i-pad:i+(pad+1), j-pad:j+(pad+1)]
-                lte_list.append(sample)
-                # non lte in middle of window
-                true = departure_coeff[:, :, i, j][:, :, np.newaxis, np.newaxis]
-                non_lte_list.append(true)
-    print(f"Train / Test Split...")
-    # Get train/test indicies
-    full_idx = np.arange(len(lte_list))
-    tr = int(k * tr_percent/100)
-    idx = np.random.choice(full_idx, size=k, replace=False)
-    tr_idx = np.random.choice(idx, size=tr, replace=False)
-    val_idx = np.setxor1d(tr_idx, idx)
-    lte = np.array(lte_list)
-    non_lte = np.array(non_lte_list)
-    lte_train = lte[tr_idx]
-    non_lte_train = non_lte[tr_idx]
-    train_len = len(lte_train)
-    lte_test = lte[val_idx]
-    non_lte_test = non_lte[val_idx]
-    test_len = len(lte_test)
-    print(f'Input shape {lte_train.shape}')
-    print(f'Output shape {non_lte_train.shape}')
-    print(f'Saving into {save_path}...')
-    with h5py.File(save_path, 'w') as f:
-        dset1 = f.create_dataset("lte training windows", data=lte_train, dtype='f')
-        dset1.attrs["len"] = train_len
-        dset2 = f.create_dataset("non lte training points", data=non_lte_train, dtype='f')
-        dset3 = f.create_dataset("lte test windows", data=lte_test, dtype='f')
-        dset3.attrs["len"] = test_len
-        dset4 = f.create_dataset("non lte test points", data=non_lte_test, dtype='f')
 
+        inputs, _ = _make_inputs_ch_first(
+            rho, z,
+            temp, vx, vy, vz, ne,
+            ndep=ndep,
+            pad=pad,
+        )
+
+        tgt = _make_targets_ch_first(
+            rho, z,
+            lte, nlte,
+            ndep=ndep,
+            pad=pad,
+        )
+
+        _extract_training_windows(
+            inputs, tgt,
+            windows, targets,
+            pad,
+        )
+
+    tr_w, tr_t, te_w, te_t = _train_test_split_global(
+        windows, targets, tr_percent
+    )
+
+    _save_training_hdf5(save_path, tr_w, tr_t, te_w, te_t)
+
+
+# ============================================================
+# ---------------- PARAM READERS ------------------------------
+# ============================================================
 
 def read_train_params(train_file):
-    """
-    Reads the parameters training size, testing size, channels, pad, 
-    and ndep from existing SunnyNet training HDF5 file.
-    """
-    tmp = h5py.File(train_file, 'r')
-    in_buf = tmp['lte training windows'].shape
-    out_buf = tmp['non lte training points'].shape
-    train_size = in_buf[0]
-    test_size = tmp['lte test windows'].shape[0]
-    in_channels = in_buf[1]
-    out_channels = out_buf[1]
-    ndep = in_buf[2]
-    pad = (in_buf[-1] - 1) // 2
-    tmp.close()
-    return train_size, test_size, in_channels, out_channels, ndep, pad
+
+    with h5py.File(train_file, "r") as f:
+
+        in_buf = f["lte training windows"].shape
+        out_buf = f["non lte training points"].shape
+
+        return (
+            in_buf[0],
+            f["lte test windows"].shape[0],
+            in_buf[1],
+            out_buf[1],
+            in_buf[2],
+            (in_buf[-1] - 1) // 2,
+        )
 
 
 def read_solve_params(solve_file):
-    """
-    Reads the atmospheric dimensions from existing SunnyNet "solving" HDF5 file.
-    """
-    tmp = h5py.File(solve_file, 'r')
-    in_buf = tmp['lte test windows'].shape
-    nx = int(np.sqrt(in_buf[0]))
-    in_channels = in_buf[1]
-    out_channels = 6
-    ndep = in_buf[2]
-    pad = (in_buf[-1] - 1) // 2
-    return nx, in_channels, ndep, pad
-    
+
+    with h5py.File(solve_file, "r") as f:
+
+        d = f["lte test windows"]
+        shape = d.shape
+
+        nx = int(d.attrs.get("nx", np.sqrt(shape[0])))
+
+        return (
+            nx,
+            shape[1],
+            shape[2],
+            (shape[-1] - 1) // 2,
+        )
+
+
+# ============================================================
+# ---------------- MODEL COMPAT -------------------------------
+# ============================================================
 
 def check_model_compat(model_type, pad):
-    if model_type == 'SunnyNet_1x1':
-        m_pad = 0
-    elif model_type == 'SunnyNet_3x3':
-        m_pad = 1
-    elif model_type == 'SunnyNet_5x5':
-        m_pad = 2
-    elif model_type == 'SunnyNet_7x7':
-        m_pad = 3
-    else:
-        raise ValueError(f"Unknown model type: {model_type}")
-    if m_pad == pad:
-        return True
-    else:
-        return False
 
+    mapping = {
+        "SunnyNet_1x1": 0,
+        "SunnyNet_3x3": 1,
+        "SunnyNet_5x5": 2,
+        "SunnyNet_7x7": 3,
+    }
+
+    if model_type not in mapping:
+        raise ValueError(model_type)
+
+    return mapping[model_type] == pad
+
+
+# ============================================================
+# ---------------- TRAIN MODEL (API) --------------------------
+# ============================================================
 
 def sunnynet_train_model(
     train_path,
@@ -251,118 +355,80 @@ def sunnynet_train_model(
     chi,
     levels,
     atom_names,
-    model_type='SunnyNet_3x3',
-    loss_function='MSELoss',
+    model_type="SunnyNet_3x3",
+    loss_function="MSELoss",
     cuda=True,
-    multi_gpu=False
+    multi_gpu=False,
 ):
-    """
-    Trains a SunnyNet neural network model to be used to predict non-LTE populations.
-    Needs a "train" file prepared with build_training_set(). Common options can
-    be entered as keywords. More advanced options can be edited on the dictionary
-    'config' below.
 
-    Parameters
-    ----------
-    train_path : str
-        Filename of saved training data, obtained after running 
-        build_training_set() from populations from a 3D atmosphere. The 
-        format is HDF5.
-    save_folder : str
-        Folder where to place the output files.
-    save_file : str
-        Name of output file where to save the file. Usually has .pt extension.
-    model_type : str, optional
-        Type of network to use. The available types are the names of 
-        SunnyNet_* classes in networkUtilities/modelArchitectures.py.
-        Currently supported networks are:
-        - 'SunnyNet_1x1' : 6 levels, 400 depth points, 1x1 window size
-        - 'SunnyNet_3x3' : 6 levels, 400 depth points, 3x3 window size
-        - 'SunnyNet_5x5' : 6 levels, 400 depth points, 5x5 window size
-        - 'SunnyNet_7x7' : 6 levels, 400 depth points, 7x7 window size
-        Should be consistent with choice of channels and ndep.
-    loss_function : str, optional
-        Type of loss function to use. Could be a class name of pytorch
-        loss functions (e.g. 'MSELoss', the default), or a class name 
-        from networkUtils/lossFunctions.py. 
-        Weight in loss calculation between mass conservation and cell by
-        cell error. Default is 0.2. To switch off entirely set to None.
-    cuda : bool, optional
-        Whether to use GPU acceleration through CUDA (default True).
-    """
-    if os.path.exists(os.path.join(save_folder, save_file)):
-        raise IOError("Output file already exists, refusing to overwrite.")
     if not os.path.isdir(save_folder):
         os.mkdir(save_folder)
-    train_size, test_size, in_channels, out_channels, ndep, pad = read_train_params(train_path)
-    if not check_model_compat(model_type, pad):
-        raise ValueError(f"Incompatible sizes between model {model_type} "
-                         f"and training set (pad={pad})")
-    params = {
-        'model': model_type, # pick one from networkUtilities/modelArchitectures.py
-        # only works with Adam right now, 
-        # can add others from torch.optim to networkUtils/modelWrapper.py:
-        'optimizer': 'Adam',  
-        'loss_fxn': loss_function, 
-        'learn_rate': 1e-3,
-        'in_channels': in_channels,
-        'out_channels': out_channels,
-        'features': ndep,
-        'cuda': {'use_cuda': cuda, 'multi_gpu': multi_gpu},
-        'mode': 'training',
-        'lines': lines,
-        'wave': wave,
-        'chi': chi,
-        'levels': levels,
-        'atom_names': atom_names
-    }
-    # training configuration 
-    config = {
-        'data_path': train_path,
-        'save_folder': save_folder,
-        'model_save': save_file,
-        'early_stopping': 10, # iterations without lower loss before breaking training loop
-        'num_epochs': 50,    # training epochs
-        'train_size': train_size, # manually calculate from your train / test split
-        'batch_size_train': 128,
-        'val_size': test_size,    # manually calculate from your train / test split
-        'batch_size_val': 128,
-        'num_workers': 64,   # CPU threads
-    }
-    print('Python VERSION:', sys.version)
-    print('pyTorch VERSION:', torch.__version__)
-    print('CUDA VERSION: ', torch.version.cuda)
-    print(f'CUDA available: {torch.cuda.is_available()}')
-    if torch.cuda.is_available():
-        print('GPU name:', torch.cuda.get_device_name())
-        print(f'Number of GPUS: {torch.cuda.device_count()}')
-    print(f"Using {params['model']} architecture...")
-    print('Creating dataset...')
-    tr_data = PopulationDataset3d(config['data_path'], train=True)
-    val_data = PopulationDataset3d(config['data_path'], train=False)
-    print('Creating data loaders...')
-    loader_dict = {}
-    train_loader = DataLoader(
-        tr_data,
-        batch_size = config['batch_size_train'],
-        pin_memory = True,
-        num_workers = config['num_workers']
-    )
-    val_loader = DataLoader(
-        val_data,
-        batch_size = config['batch_size_val'],
-        pin_memory = True,
-        num_workers = config['num_workers']
-    )
-    loader_dict['train'] = train_loader
-    loader_dict['val'] = val_loader
-    h_model = Model(params)
-    epoch_loss = train(config, h_model, loader_dict)
-    # save epoch losses for plotting
-    with open(f"{config['save_folder']}{config['model_save'][:-3]}_loss.txt", "w") as f:
-        for i in range(len(epoch_loss['train'])):
-            f.write(str(epoch_loss['train'][i]) + '   ' + str(epoch_loss['val'][i]) + '\n')
 
+    tr, te, Cin, Cout, ndep, pad = read_train_params(train_path)
+
+    if not check_model_compat(model_type, pad):
+        raise ValueError("Model/window mismatch")
+
+    params = dict(
+        model=model_type,
+        optimizer="Adam",
+        loss_fxn=loss_function,
+        learn_rate=1e-3,
+        in_channels=Cin,
+        out_channels=Cout,
+        features=ndep,
+        cuda={"use_cuda": cuda, "multi_gpu": multi_gpu},
+        mode="training",
+        lines=lines,
+        wave=wave,
+        chi=chi,
+        levels=levels,
+        atom_names=atom_names,
+    )
+
+    config = dict(
+        data_path=train_path,
+        save_folder=save_folder,
+        model_save=save_file,
+        early_stopping=10,
+        num_epochs=50,
+        train_size=tr,
+        val_size=te,
+        batch_size_train=128,
+        batch_size_val=128,
+        num_workers=64,
+    )
+
+    train_loader = DataLoader(
+        PopulationDataset3d(train_path, True),
+        batch_size=128,
+        num_workers=64,
+        pin_memory=True,
+    )
+
+    val_loader = DataLoader(
+        PopulationDataset3d(train_path, False),
+        batch_size=128,
+        num_workers=64,
+        pin_memory=True,
+    )
+
+    model = Model(params)
+
+    losses = train(
+        config,
+        model,
+        {"train": train_loader, "val": val_loader},
+    )
+
+    with open(f"{save_folder}{save_file[:-3]}_loss.txt", "w") as f:
+        for trl, vall in zip(losses["train"], losses["val"]):
+            f.write(f"{trl} {vall}\n")
+
+
+# ============================================================
+# ---------------- PREDICT (API) ------------------------------
+# ============================================================
 
 def sunnynet_predict_populations(
     model_path,
@@ -373,81 +439,47 @@ def sunnynet_predict_populations(
     wave,
     chi,
     levels,
-    atom_names, 
+    atom_names,
     cuda=True,
-    model_type='SunnyNet_3x3',
-    loss_function='MSELoss'
+    model_type="SunnyNet_3x3",
+    loss_function="MSELoss",
 ):
-    """
-    Predicts non-LTE populations using SunnyNet, using an existing trained set,
-    model data, and input LTE populations pre-prepared with build_solving_set()
 
-    Parameters
-    ----------
-    model_path : str
-        Filename of saved neural network model, obtained after running
-        train_model_3d(). Typical extension is .pt.
-    train_path : str
-        Filename of saved training data, obtained after running 
-        build_training_set() from populations from a 3D atmosphere. The 
-        format is HDF5.
-    test_path : str
-        Filename with pre-prepared data from the input LTE populations
-        for which to predict the NLTE populations. This file should be
-        obtained by running build_solving_set(). The format is HDF5. 
-    save_path : str
-        Filename of output file to save predicted populations. The format
-        is HDF5.
-    cuda : bool, optional
-        Whether to use GPU acceleration through CUDA (default True).
-    model_type : str, optional
-        Type of network to use. The available types are the names of 
-        SunnyNet_* classes in networkUtilities/modelArchitectures.py.
-        Currently supported networks are:
-        - 'SunnyNet_1x1' : 6 levels, 400 depth points, 1x1 window size
-        - 'SunnyNet_3x3' : 6 levels, 400 depth points, 3x3 window size
-        - 'SunnyNet_5x5' : 6 levels, 400 depth points, 5x5 window size
-        - 'SunnyNet_7x7' : 6 levels, 400 depth points, 7x7 window size
-        Should be consistent with choice of channels and ndep.
-    loss_function : str, optional
-        Type of loss function to use. Could be a class name of pytorch
-        loss functions (e.g. 'MSELoss', the default), or a class name 
-        from networkUtils/lossFunctions.py. 
-        Weight in loss calculation between mass conservation and cell by
-        cell error. Default is 0.2. To switch off entirely set to None.
-    """
-    _, _, in_channels, out_channels, ndep, pad = read_train_params(train_path)
-    nx, in_channels1, ndep1, npad1 = read_solve_params(test_path)
-    assert in_channels == in_channels1, "Inconsistent number of input channels between train and test data"
-    assert ndep == ndep1, "Inconsistent number of depth points between train and test data"
-    assert pad == npad1, "Inconsistent padding number between train and test data"
-    if not check_model_compat(model_type, pad):
-        raise ValueError(f"Incompatible sizes between model {model_type} "
-                         f"and training set (pad={pad})")
+    _, _, Cin, Cout, ndep, pad = read_train_params(train_path)
+    nx, Cin2, ndep2, pad2 = read_solve_params(test_path)
+
+    assert Cin == Cin2
+    assert ndep == ndep2
+    assert pad == pad2
+
     if os.path.isfile(save_path):
-        raise IOError("Output file already exists. Refusing to overwrite.")
-    pred_config = {
-        'cuda': cuda,      
-        'model': model_type,
-        'model_path': model_path,
-        'in_channels': in_channels,   # number of atomic levels
-        'out_channels': out_channels,
-        'features': ndep,       # z dimension
-        'mode': 'testing',
-        'multi_gpu_train': False,
-        'loss_fxn': loss_function,
-        'output_XY': nx,  # number of pixels in horizontal dimensions
-        'lines': lines,
-        'wave': wave,
-        'chi': chi,
-        'levels': levels,
-        'atom_names': atom_names
-    }
-    populations = predict_populations(test_path, train_path, pred_config)
-    new_cmass_scale = np.logspace(-6, 2, 400)
-    print('Exponentiate')
-    populations = 10**populations
-    print(f'Atmos shape: {populations.shape}')
-    with h5py.File(save_path, 'w') as f:
-        dset = f.create_dataset("populations", data=populations, dtype='f')
-        dset.attrs['cmass_scale'] = new_cmass_scale
+        raise IOError("Output exists.")
+
+    pred_config = dict(
+        cuda=cuda,
+        model=model_type,
+        model_path=model_path,
+        in_channels=Cin,
+        out_channels=Cout,
+        features=ndep,
+        mode="testing",
+        loss_fxn=loss_function,
+        output_XY=nx,
+        lines=lines,
+        wave=wave,
+        chi=chi,
+        levels=levels,
+        atom_names=atom_names,
+    )
+
+    pops = predict_populations(
+        test_path,
+        train_path,
+        pred_config,
+    )
+
+    pops = 10 ** pops
+
+    with h5py.File(save_path, "w") as f:
+        d = f.create_dataset("populations", data=pops)
+        d.attrs["cmass_scale"] = np.logspace(-6, 2, 400)
