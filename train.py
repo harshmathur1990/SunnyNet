@@ -14,14 +14,14 @@ MULTI3D_TRAINING_DATA = [
     {
         "MULTI3D_PATHS": [
              "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/H",
-             "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/CA"
+             # "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/CA"
         ],
         "MULTI3D_ATMOS": "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/atm3d",
     },
     {
         "MULTI3D_PATHS": [
              "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/386/H",
-             "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/386/CA"
+             # "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/386/CA"
         ],
         "MULTI3D_ATMOS": "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/386/atm3d",
     }
