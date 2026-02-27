@@ -86,7 +86,7 @@ chi = [
 levels = [
 ]
 
-atom_names = ["H", "CA"]
+atom_names = ["H"]  #, "CA"]
 
 NDEP = 400
 PAD = 1
