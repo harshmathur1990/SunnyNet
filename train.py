@@ -401,6 +401,8 @@ def main():
         build_training(temp, vx, vy, vz, ne, lte, nlte, rho, z)
 
     # ---- TRAIN MODEL ----
+    ensure_levels_loaded()
+    
     if not os.path.exists(os.path.join(MODEL_DIR, MODEL_FILE)):
         train_model()
 
