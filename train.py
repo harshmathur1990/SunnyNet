@@ -401,111 +401,77 @@ def predict():
 # ------------------------------------------------------------
 # STEP 6: DIAGNOSTICS
 # ------------------------------------------------------------
-def training_departure_profile():
+def training_departure_profile(rho_list, z_list, lte_blocks, nlte_blocks):
 
-    (
-        atmos_list,
-        rho_list,
-        z_list,
-        *_,
-        lte_blocks,
-        nlte_blocks,
-    ) = load_training_multi3d_data()
-
+    EPS = 1e-30
     cmass_grid = np.logspace(-6, 2, NDEP)
 
     mean_all = []
 
     for i in range(len(lte_blocks)):
-
         rho = rho_list[i]
         z   = z_list[i]
 
-        dep = nlte_blocks[i] / (lte_blocks[i] + 1e-30)
-        logdep = np.log10(dep)
+        beta = (nlte_blocks[i] + EPS) / (lte_blocks[i] + EPS)
+        beta = np.clip(beta, 1e-6, 1e6)
+        logbeta = np.log10(beta)
 
-        logdep_cmass = interpolate_everything(
-            rho, z, logdep, cmass_grid
-        )
+        logbeta_cmass = interpolate_everything(rho, z, logbeta, cmass_grid)
 
-        mean_all.append(
-            np.mean(np.abs(logdep_cmass), axis=(0,1,3))
-        )
+        mean_all.append(np.mean(np.abs(logbeta_cmass), axis=(0, 1, 3)))
 
     mean_all = np.mean(mean_all, axis=0)
-
     return cmass_grid, mean_all
 
-def prediction_error_profile():
+
+def prediction_error_profile(rho_list, z_list, lte_blocks, nlte_blocks):
 
     EPS = 1e-30
-
-    (
-        _,
-        rho_list,
-        z_list,
-        *_,
-        lte_blocks,
-        nlte_blocks,
-    ) = load_training_multi3d_data()
-
     err_all = []
+    cmass_ref = None
 
     for idx, PRED_ATMOS in enumerate(MULTI3D_PRED_DATA):
 
         name = PRED_ATMOS["NAME"]
-
-        pred_file = (
-            f"sunnynet_output_3D_sim_s5_{name}_{TAG}.hdf5"
-        )
-
+        pred_file = f"sunnynet_output_3D_sim_s5_{name}_{TAG}.hdf5"
         print(f"\nReading prediction: {pred_file}")
 
         with h5py.File(pred_file, "r") as f:
-            pred_pop = f["populations"][:]   # ← NLTE prediction
-            cmass = f["populations"].attrs["cmass_scale"]
+            pred_pop = f["populations"][:]          # (nx,ny,NDEP,nlev)
+            cmass = f["populations"].attrs["cmass_scale"]  # (NDEP,)
 
-        # ----------------------------------
-        # TRUE departure coefficient
-        # ----------------------------------
-        lte_true  = lte_blocks[idx]
+        if cmass_ref is None:
+            cmass_ref = cmass
+        else:
+            # sanity: ensure identical cmass grids across outputs
+            if cmass_ref.shape != cmass.shape or np.max(np.abs(cmass_ref - cmass)) > 0:
+                raise ValueError("cmass_scale differs between prediction files.")
+
+        rho = rho_list[idx]
+        z   = z_list[idx]
+        lte_true  = lte_blocks[idx]   # (nx,ny,nz,nlev)
         nlte_true = nlte_blocks[idx]
 
-        beta_true = (nlte_true + EPS)/(lte_true + EPS)
-        beta_true = np.clip(beta_true, 1e-6, 1e6)
+        # --- Interpolate LTE/NLTE truth onto prediction cmass grid ---
+        lte_cmass  = interpolate_everything(rho, z, lte_true,  cmass)  # (nx,ny,NDEP,nlev)
+        nlte_cmass = interpolate_everything(rho, z, nlte_true, cmass)
 
+        # --- Truth log10(beta) on same grid ---
+        beta_true = (nlte_cmass + EPS) / (lte_cmass + EPS)
+        beta_true = np.clip(beta_true, 1e-6, 1e6)
         logbeta_true = np.log10(beta_true)
 
-        logbeta_true = interpolate_everything(
-            rho_list[idx],
-            z_list[idx],
-            logbeta_true,
-            cmass
-        )
-
-        # ----------------------------------
-        # PREDICTED departure coefficient
-        # ----------------------------------
-        beta_pred = (pred_pop + EPS)/(lte_true + EPS)
+        # --- Predicted log10(beta) using predicted NLTE pops + LTE truth ---
+        beta_pred = (pred_pop + EPS) / (lte_cmass + EPS)
         beta_pred = np.clip(beta_pred, 1e-6, 1e6)
-
         logbeta_pred = np.log10(beta_pred)
 
-        # ----------------------------------
-        # ERROR
-        # ----------------------------------
-        abs_err = np.abs(
-            logbeta_pred - logbeta_true
-        )
+        abs_err = np.abs(logbeta_pred - logbeta_true)
 
-        err_profile = np.mean(
-            abs_err,
-            axis=(0,1,3)
-        )
-
+        err_profile = np.mean(abs_err, axis=(0, 1, 3))  # keep cmass axis
         err_all.append(err_profile)
 
-    return cmass, np.mean(err_all, axis=0)
+    return cmass_ref, np.mean(err_all, axis=0)
 
 
 def plot_overlay_diagnostics(
@@ -593,14 +559,24 @@ def main():
     # ---- PREDICT ----
     predict()
 
-    cmass, nlte_strength = training_departure_profile()
-    _, ml_error = prediction_error_profile()
+    # ---- Load training blocks once (for diagnostics) ----
+    (
+        atmos_list,
+        rho_list,
+        z_list,
+        temp_list,
+        vx_list,
+        vy_list,
+        vz_list,
+        ne_list,
+        lte_blocks,
+        nlte_blocks,
+    ) = load_training_multi3d_data()
 
-    plot_overlay_diagnostics(
-        cmass,
-        nlte_strength,
-        ml_error
-    )
+    cmass, nlte_strength = training_departure_profile(rho_list, z_list, lte_blocks, nlte_blocks)
+    _, ml_error = prediction_error_profile(rho_list, z_list, lte_blocks, nlte_blocks)
+
+    plot_overlay_diagnostics(cmass, nlte_strength, ml_error)
 
     print("\n=== PIPELINE COMPLETE ===")
 
