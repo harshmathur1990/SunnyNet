@@ -4,28 +4,104 @@ import h5py
 import SunnyNet
 
 from helita.sim.multi3d import Multi3dAtmos, Multi3dOut
-from scipy.integrate import cumulative_trapezoid as cumtrapz
-from scipy.interpolate import interp1d
+import matplotlib.pyplot as plt
+from interp_utils import interpolate_everything
 
-# ------------------------------------------------------------
-# CONFIG
-# ------------------------------------------------------------
-MULTI3D_TRAINING_DATA = [
-    {
-        "MULTI3D_PATHS": [
-             "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/H",
-             # "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/CA"
-        ],
-        "MULTI3D_ATMOS": "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/atm3d",
+
+SIMULATIONS = {
+    "en024048_hion": {
+        "base_path": "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion",
+        "snaps": ["385", "386"],
     },
-    {
-        "MULTI3D_PATHS": [
-             "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/386/H",
-             # "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/386/CA"
-        ],
-        "MULTI3D_ATMOS": "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/386/atm3d",
+
+    # tomorrow you just add:
+    # "en012345_newrun": {
+    #     "base_path": ".../en012345_newrun",
+    #     "snaps": ["420", "421"],
+    # },
+}
+
+ATOM_CONFIG = {
+    "H": {
+        "subdir": "H",
+
+        "lines": np.array(
+            [(0,1),(0,2),(0,3),(0,4),
+             (1,2),(1,3),(1,4),
+             (2,3),(2,4),(3,4)],
+            dtype=np.float32
+        ),
+
+        "wave": np.array(
+            [1215.6701,1025.7220,972.53650,949.74287,
+             6562.79,4861.35,4340.472,
+             18750,12820,40510],
+            dtype=np.float32
+        ),
+
+        "chi": np.array([
+            1.6339941854018686e-18,
+            1.936585907218822e-18,
+            2.0424878450955273e-18,
+            2.091506177644877e-18,
+            2.1802152677122893e-18
+        ], dtype=np.float32),
+    },
+
+    "CA": {
+        "subdir": "CA",
+
+        "lines": np.array(
+            [(0,3),(0,4),(1,3),(1,4),(2,4)],
+            dtype=np.float32
+        ),
+
+        "wave": np.array(
+            [3968.47,3933.66,8662.14,8498.02,8542.09],
+            dtype=np.float32
+        ),
+
+        "chi": np.array([
+            2.7115478588655445e-19,
+            2.7235960502783243e-19,
+            5.004162033597224e-19,
+            5.048445871090645e-19,
+            1.902059054757628e-18
+        ], dtype=np.float32),
     }
-]
+}
+
+ACTIVE_SIMS  = ["en024048_hion"]
+ACTIVE_ATOMS = ["H"]
+
+MULTI3D_TRAINING_DATA = []
+
+for sim in ACTIVE_SIMS:
+
+    sim_info = SIMULATIONS[sim]
+    base = sim_info["base_path"]
+
+    for snap in sim_info["snaps"]:
+
+        entry = {
+            "MULTI3D_PATHS": [],
+            "MULTI3D_ATMOS": f"{base}/{snap}/atm3d"
+        }
+
+        for atom in ACTIVE_ATOMS:
+            atom_dir = ATOM_CONFIG[atom]["subdir"]
+
+            entry["MULTI3D_PATHS"].append(
+                f"{base}/{snap}/{atom_dir}"
+            )
+
+        MULTI3D_TRAINING_DATA.append(entry)
+
+atom_names = ACTIVE_ATOMS
+lines = [ATOM_CONFIG[a]["lines"] for a in ACTIVE_ATOMS]
+wave  = [ATOM_CONFIG[a]["wave"]  for a in ACTIVE_ATOMS]
+chi   = [ATOM_CONFIG[a]["chi"]   for a in ACTIVE_ATOMS]
+
 
 MULTI3D_PRED_DATA = [
     {
@@ -40,53 +116,8 @@ MULTI3D_PRED_DATA = [
     }
 ]
 
-lines = [
-    np.array(
-        [(0,1), (0,2), (0, 3), (0, 4), (1,2), (1,3), (1, 4), (2,3), (2, 4), (3, 4)],
-        dtype=np.float32
-    ),
-    np.array(
-        [(0, 3), (0, 4), (1, 3), (1, 4), (2, 4)],
-        dtype=np.float32
-    )
-]
-
-wave = [
-    np.array([1215.6701, 1025.7220, 972.53650, 949.74287, 6562.79, 4861.35, 4340.472, 18750, 12820, 40510],
-        dtype=np.float32
-    ),
-    np.array([3968.47, 3933.66, 8662.14, 8498.02, 8542.09],
-        dtype=np.float32
-    )
-]
-
-chi = [
-    np.array(
-        [
-            1.6339941854018686e-18,
-            1.936585907218822e-18,
-            2.0424878450955273e-18,
-            2.091506177644877e-18,
-            2.1802152677122893e-18
-        ],
-        dtype=np.float32
-    ),
-    np.array(
-        [
-            2.7115478588655445e-19,
-            2.7235960502783243e-19,
-            5.004162033597224e-19,
-            5.048445871090645e-19,
-            1.902059054757628e-18
-        ],
-        dtype=np.float32
-    )
-]
-
 levels = [
 ]
-
-atom_names = ["H"]  #, "CA"]
 
 NDEP = 400
 PAD = 1
@@ -97,31 +128,6 @@ TRAIN_FILE   = f"3D_sim_train_s123_{TAG}.hdf5"
 MODEL_DIR  = f"training_{TAG}/"
 MODEL_FILE = f"3D_sim_train_s123_{TAG}.pt"
 MODEL_TYPE = f"SunnyNet_{TAG}"
-
-# ------------------------------------------------------------
-# UTILS
-# ------------------------------------------------------------
-def interpolate_everything(rho_arr, z_scale, pops_array, new_cmass_scale):
-    """
-    Vectorized interpolation onto new cmass grid.
-    """
-
-    def interp_column(rho_col, z_col, pops_col, new_scale):
-        cmass = cumtrapz(rho_col, -z_col, initial=0)
-        f = interp1d(
-            cmass,
-            pops_col,
-            axis=0,
-            kind="linear",
-            fill_value="extrapolate",
-        )
-        return f(new_scale)
-
-    vec = np.vectorize(
-        interp_column,
-        signature="(n),(n),(n,o),(m)->(m,o)"
-    )
-    return vec(rho_arr, z_scale, pops_array, new_cmass_scale)
 
 
 def read_mesh(mesh_file):
@@ -150,6 +156,14 @@ def read_mesh(mesh_file):
     z = tmp[inc:inc + nz]
 
     return nx, ny, nz, x, y, z
+
+
+def ensure_levels_loaded():
+    global levels
+    if len(levels) == 0:
+        print("Loading levels from training data...")
+        load_training_multi3d_data()
+
 
 # ------------------------------------------------------------
 # STEP 1: LOAD MULTI3D
@@ -384,11 +398,157 @@ def predict():
                 loss_function="PhysicsLoss"
             )
 
-def ensure_levels_loaded():
-    global levels
-    if len(levels) == 0:
-        print("Loading levels from training data...")
-        load_training_multi3d_data()
+# ------------------------------------------------------------
+# STEP 6: DIAGNOSTICS
+# ------------------------------------------------------------
+def training_departure_profile():
+
+    (
+        atmos_list,
+        rho_list,
+        z_list,
+        *_,
+        lte_blocks,
+        nlte_blocks,
+    ) = load_training_multi3d_data()
+
+    cmass_grid = np.logspace(-6, 2, NDEP)
+
+    mean_all = []
+
+    for i in range(len(lte_blocks)):
+
+        rho = rho_list[i]
+        z   = z_list[i]
+
+        dep = nlte_blocks[i] / (lte_blocks[i] + 1e-30)
+        logdep = np.log10(dep)
+
+        logdep_cmass = interpolate_everything(
+            rho, z, logdep, cmass_grid
+        )
+
+        mean_all.append(
+            np.mean(np.abs(logdep_cmass), axis=(0,1,3))
+        )
+
+    mean_all = np.mean(mean_all, axis=0)
+
+    return cmass_grid, mean_all
+
+def prediction_error_profile():
+
+    cmass_all = []
+    err_all = []
+
+    for PRED_ATMOS in MULTI3D_PRED_DATA:
+
+        name = PRED_ATMOS["NAME"]
+
+        pred_file = (
+            f"sunnynet_output_3D_sim_s5_{name}_{TAG}.hdf5"
+        )
+
+        print(f"Reading prediction: {pred_file}")
+
+        with h5py.File(pred_file, "r") as f:
+            pred = f["populations"][:]
+            cmass = f["populations"].attrs["cmass_scale"]
+
+        # -----------------------------------
+        # Load TRUE populations
+        # -----------------------------------
+        idx = MULTI3D_PRED_DATA.index(PRED_ATMOS)
+
+        _, rho_list, z_list, *_ , lte_blocks, nlte_blocks = \
+            load_training_multi3d_data()
+
+        lte  = lte_blocks[idx]
+        nlte = nlte_blocks[idx]
+
+        dep_true = np.log10(nlte/(lte+1e-30))
+
+        dep_true = interpolate_everything(
+            rho_list[idx],
+            z_list[idx],
+            dep_true,
+            cmass
+        )
+
+        # -----------------------------------
+        # error
+        # -----------------------------------
+        abs_err = np.abs(pred - dep_true)
+
+        err_profile = np.mean(
+            abs_err,
+            axis=(0,1,3)
+        )
+
+        cmass_all.append(cmass)
+        err_all.append(err_profile)
+
+    return cmass_all[0], np.mean(err_all, axis=0)
+
+
+def plot_overlay_diagnostics(
+    cmass,
+    nlte_strength,
+    ml_error,
+    savepath="NLTE_vs_ML_error.pdf"
+):
+
+    plt.rcParams.update({
+        "font.family": "serif",
+        "font.size": 12,
+        "pdf.fonttype": 42,
+    })
+
+    logcm = np.log10(cmass)
+
+    fig, ax = plt.subplots(
+        figsize=(6.5,4.5)
+    )
+
+    ax.plot(
+        logcm,
+        nlte_strength,
+        lw=3,
+        label="Intrinsic NLTE departure"
+    )
+
+    ax.plot(
+        logcm,
+        ml_error,
+        lw=3,
+        linestyle="--",
+        label="SunnyNet prediction error"
+    )
+
+    ax.set_xlabel(
+        r"$\log_{10}(\mathrm{Column\ Mass}\,[g\,cm^{-2}])$"
+    )
+
+    ax.set_ylabel(
+        r"Mean $|\Delta \log_{10}\beta|$"
+    )
+
+    ax.grid(alpha=0.3)
+    ax.legend()
+
+    ax.invert_xaxis()
+
+    plt.tight_layout()
+
+    fig.savefig(
+        savepath,
+        bbox_inches="tight"
+    )
+
+    print(f"Saved → {savepath}")
+
+    plt.close(fig)
+
 
 # ------------------------------------------------------------
 # MAIN
@@ -415,6 +575,15 @@ def main():
 
     # ---- PREDICT ----
     predict()
+
+    cmass, nlte_strength = training_departure_profile()
+    _, ml_error = prediction_error_profile()
+
+    plot_overlay_diagnostics(
+        cmass,
+        nlte_strength,
+        ml_error
+    )
 
     print("\n=== PIPELINE COMPLETE ===")
 
