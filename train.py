@@ -438,10 +438,20 @@ def training_departure_profile():
 
 def prediction_error_profile():
 
-    cmass_all = []
+    EPS = 1e-30
+
+    (
+        _,
+        rho_list,
+        z_list,
+        *_,
+        lte_blocks,
+        nlte_blocks,
+    ) = load_training_multi3d_data()
+
     err_all = []
 
-    for PRED_ATMOS in MULTI3D_PRED_DATA:
+    for idx, PRED_ATMOS in enumerate(MULTI3D_PRED_DATA):
 
         name = PRED_ATMOS["NAME"]
 
@@ -449,46 +459,53 @@ def prediction_error_profile():
             f"sunnynet_output_3D_sim_s5_{name}_{TAG}.hdf5"
         )
 
-        print(f"Reading prediction: {pred_file}")
+        print(f"\nReading prediction: {pred_file}")
 
         with h5py.File(pred_file, "r") as f:
-            pred = f["populations"][:]
+            pred_pop = f["populations"][:]   # ← NLTE prediction
             cmass = f["populations"].attrs["cmass_scale"]
 
-        # -----------------------------------
-        # Load TRUE populations
-        # -----------------------------------
-        idx = MULTI3D_PRED_DATA.index(PRED_ATMOS)
+        # ----------------------------------
+        # TRUE departure coefficient
+        # ----------------------------------
+        lte_true  = lte_blocks[idx]
+        nlte_true = nlte_blocks[idx]
 
-        _, rho_list, z_list, *_ , lte_blocks, nlte_blocks = \
-            load_training_multi3d_data()
+        beta_true = (nlte_true + EPS)/(lte_true + EPS)
+        beta_true = np.clip(beta_true, 1e-6, 1e6)
 
-        lte  = lte_blocks[idx]
-        nlte = nlte_blocks[idx]
+        logbeta_true = np.log10(beta_true)
 
-        dep_true = np.log10(nlte/(lte+1e-30))
-
-        dep_true = interpolate_everything(
+        logbeta_true = interpolate_everything(
             rho_list[idx],
             z_list[idx],
-            dep_true,
+            logbeta_true,
             cmass
         )
 
-        # -----------------------------------
-        # error
-        # -----------------------------------
-        abs_err = np.abs(pred - dep_true)
+        # ----------------------------------
+        # PREDICTED departure coefficient
+        # ----------------------------------
+        beta_pred = (pred_pop + EPS)/(lte_true + EPS)
+        beta_pred = np.clip(beta_pred, 1e-6, 1e6)
+
+        logbeta_pred = np.log10(beta_pred)
+
+        # ----------------------------------
+        # ERROR
+        # ----------------------------------
+        abs_err = np.abs(
+            logbeta_pred - logbeta_true
+        )
 
         err_profile = np.mean(
             abs_err,
             axis=(0,1,3)
         )
 
-        cmass_all.append(cmass)
         err_all.append(err_profile)
 
-    return cmass_all[0], np.mean(err_all, axis=0)
+    return cmass, np.mean(err_all, axis=0)
 
 
 def plot_overlay_diagnostics(
