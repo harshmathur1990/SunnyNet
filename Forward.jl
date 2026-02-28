@@ -12,35 +12,6 @@
 #   - Synthesizes 1D line profiles for all columns (nx, ny) using Muspel
 #   - Writes intensity + wavelength to an HDF5 file
 #   - Writes two diagnostic plots (PNG)
-#
-# Example:
-#   julia ForwardSynthesis.jl \
-#     --mode ml \
-#     --atom /path/to/atom.h6_tiago2.yaml \
-#     --mesh /path/to/mesh.en024048_hion \
-#     --atmos /path/to/atm3d.en024048_hion \
-#     --pred_h5 sunnynet_output_3D_sim_s5_3x3.hdf5 \
-#     --pred_key populations \
-#     --out_h5 intensity_ml_3x3.h5 \
-#     --out_prefix diag_ml \
-#     --line_index 5 \
-#     --x 33 --y 21 \
-#     --cmass_n 400 --cmass_logmin -6 --cmass_logmax 2
-#
-#   julia ForwardSynthesis.jl \
-#     --mode bifrost \
-#     --atom /path/to/atom.h6_tiago2.yaml \
-#     --mesh /path/to/mesh.en024048_hion \
-#     --atmos /path/to/atm3d.en024048_hion \
-#     --pops /path/to/out_pop \
-#     --out_h5 intensity_bifrost.h5 \
-#     --out_prefix diag_bifrost \
-#     --line_index 5
-#
-# Notes:
-#   - The script keeps array permutations consistent with your notebook.
-#   - Departure coefficients are assumed to be stored in an HDF5 dataset
-#     named by --pred_key (default: "populations").
 # -----------------------------------------------------------------------------
 
 ENV["GKSwstype"] = "100"     # file / offscreen
@@ -78,15 +49,15 @@ const CONFIG_ML = (
             lower_level = 2,
             upper_level = 3
         ),
-        (
-            name = "CA",
-            atom_file = "/mn/stornext/u3/harshm/Documents/WorkRepo/multi3d/input/atoms/atom.ca2.yaml",
-            pops_file = "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/CA/out_pop",
-            nlevels = 6,
-            line_index = 5,
-            lower_level = 3,
-            upper_level = 5
-        )
+        # (
+        #     name = "CA",
+        #     atom_file = "/mn/stornext/u3/harshm/Documents/WorkRepo/multi3d/input/atoms/atom.ca2.yaml",
+        #     pops_file = "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/CA/out_pop",
+        #     nlevels = 6,
+        #     line_index = 5,
+        #     lower_level = 3,
+        #     upper_level = 5
+        # )
     ],
 
     mesh_file  = "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/mesh",
@@ -98,7 +69,6 @@ const CONFIG_ML = (
     out_h5     = "intensity_ml_en024048_hion_385_3x3.h5",
     out_prefix = "diag_ml",
 
-    line_index = 5,
     x_pick     = 33,
     y_pick     = 21,
 
@@ -151,7 +121,6 @@ const CONFIG_BIFROST = (
     out_h5     = "intensity_bifrost.h5",
     out_prefix = "diag_bifrost",
 
-    line_index = 5,
     x_pick     = 33,
     y_pick     = 21,
 
