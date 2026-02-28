@@ -437,38 +437,43 @@ def prediction_error_profile(rho_list, z_list, lte_blocks, nlte_blocks):
         print(f"\nReading prediction: {pred_file}")
 
         with h5py.File(pred_file, "r") as f:
-            pred_pop = f["populations"][:]          # (nx,ny,NDEP,nlev)
+            beta_pred = f["populations"][:]                # <-- β_pred (NOT log)
             cmass = f["populations"].attrs["cmass_scale"]  # (NDEP,)
 
+        # keep one common cmass
         if cmass_ref is None:
             cmass_ref = cmass
         else:
-            # sanity: ensure identical cmass grids across outputs
             if cmass_ref.shape != cmass.shape or np.max(np.abs(cmass_ref - cmass)) > 0:
                 raise ValueError("cmass_scale differs between prediction files.")
 
+        # ----------------------------
+        # TRUE log10(beta) on same cmass grid
+        # ----------------------------
         rho = rho_list[idx]
         z   = z_list[idx]
-        lte_true  = lte_blocks[idx]   # (nx,ny,nz,nlev)
+
+        lte_true  = lte_blocks[idx]
         nlte_true = nlte_blocks[idx]
 
-        # --- Interpolate LTE/NLTE truth onto prediction cmass grid ---
-        lte_cmass  = interpolate_everything(rho, z, lte_true,  cmass)  # (nx,ny,NDEP,nlev)
-        nlte_cmass = interpolate_everything(rho, z, nlte_true, cmass)
-
-        # --- Truth log10(beta) on same grid ---
-        beta_true = (nlte_cmass + EPS) / (lte_cmass + EPS)
-        beta_true = np.clip(beta_true, 1e-6, 1e6)
+        beta_true = (nlte_true + EPS) / (lte_true + EPS)
+        beta_true = np.clip(beta_true, 1e-12, 1e12)        # wider clip is fine
         logbeta_true = np.log10(beta_true)
 
-        # --- Predicted log10(beta) using predicted NLTE pops + LTE truth ---
-        beta_pred = (pred_pop + EPS) / (lte_cmass + EPS)
-        beta_pred = np.clip(beta_pred, 1e-6, 1e6)
+        logbeta_true = interpolate_everything(rho, z, logbeta_true, cmass_ref)
+
+        # ----------------------------
+        # PRED log10(beta)
+        # ----------------------------
+        beta_pred = np.clip(beta_pred, 1e-12, 1e12)
         logbeta_pred = np.log10(beta_pred)
 
+        # ----------------------------
+        # ERROR profile vs cmass
+        # ----------------------------
         abs_err = np.abs(logbeta_pred - logbeta_true)
+        err_profile = np.mean(abs_err, axis=(0, 1, 3))  # avg over x,y,level
 
-        err_profile = np.mean(abs_err, axis=(0, 1, 3))  # keep cmass axis
         err_all.append(err_profile)
 
     return cmass_ref, np.mean(err_all, axis=0)
