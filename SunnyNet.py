@@ -467,6 +467,7 @@ def sunnynet_predict_populations(
         out_channels=Cout,
         features=ndep,
         mode="testing",
+        multi_gpu_train=False,
         loss_fxn=loss_function,
         output_XY=nx,
         lines=lines,
