@@ -6,6 +6,7 @@ import SunnyNet
 from helita.sim.multi3d import Multi3dAtmos, Multi3dOut
 import matplotlib.pyplot as plt
 from interp_utils import interpolate_everything
+from matplotlib.colors import LogNorm
 
 
 SIMULATIONS = {
@@ -401,130 +402,203 @@ def predict():
 # ------------------------------------------------------------
 # STEP 6: DIAGNOSTICS
 # ------------------------------------------------------------
-def training_departure_profile(rho_list, z_list, lte_blocks, nlte_blocks):
+def training_departure_density_per_level(
+        rho_list, z_list,
+        lte_blocks, nlte_blocks):
 
     EPS = 1e-30
     cmass_grid = np.logspace(-6, 2, NDEP)
 
-    mean_all = []
+    nlevel = lte_blocks[0].shape[-1]
 
-    for i in range(len(lte_blocks)):
-        rho = rho_list[i]
-        z   = z_list[i]
+    results = []
 
-        beta = (nlte_blocks[i] + EPS) / (lte_blocks[i] + EPS)
-        beta = np.clip(beta, 1e-6, 1e6)
-        logbeta = np.log10(beta)
+    for lev in range(nlevel):
 
-        logbeta_cmass = interpolate_everything(rho, z, logbeta, cmass_grid)
+        X_all = []
+        Y_all = []
 
-        mean_all.append(np.mean(np.abs(logbeta_cmass), axis=(0, 1, 3)))
+        for i in range(len(lte_blocks)):
 
-    mean_all = np.mean(mean_all, axis=0)
-    return cmass_grid, mean_all
+            rho = rho_list[i]
+            z   = z_list[i]
+
+            beta = (
+                nlte_blocks[i][..., lev] + EPS
+            ) / (
+                lte_blocks[i][..., lev] + EPS
+            )
+
+            logbeta = np.log10(
+                np.clip(beta, 1e-12, 1e12)
+            )
+
+            logbeta = logbeta[..., None]
+
+            logbeta_cmass = interpolate_everything(
+                rho, z, logbeta, cmass_grid
+            )[...,0]
+
+            nx, ny, nz = logbeta_cmass.shape
+
+            X = np.repeat(np.log10(cmass_grid), nx*ny)
+            Y = np.abs(
+                logbeta_cmass.reshape(-1, nz).T
+            ).flatten()
+
+            X_all.append(X)
+            Y_all.append(Y)
+
+        results.append((
+            np.concatenate(X_all),
+            np.concatenate(Y_all)
+        ))
+
+    return results
 
 
-def prediction_error_profile(rho_list, z_list, lte_blocks, nlte_blocks):
+def prediction_error_density_per_level(
+        rho_list, z_list,
+        lte_blocks, nlte_blocks):
 
     EPS = 1e-30
-    err_all = []
-    cmass_ref = None
+    nlevel = lte_blocks[0].shape[-1]
 
-    for idx, PRED_ATMOS in enumerate(MULTI3D_PRED_DATA):
+    results = []
 
-        name = PRED_ATMOS["NAME"]
-        pred_file = f"sunnynet_output_3D_sim_s5_{name}_{TAG}.hdf5"
-        print(f"\nReading prediction: {pred_file}")
+    for lev in range(nlevel):
 
-        with h5py.File(pred_file, "r") as f:
-            beta_pred = f["populations"][:]                # <-- β_pred (NOT log)
-            cmass = f["populations"].attrs["cmass_scale"]  # (NDEP,)
+        X_all = []
+        Y_all = []
 
-        # keep one common cmass
-        if cmass_ref is None:
-            cmass_ref = cmass
-        else:
-            if cmass_ref.shape != cmass.shape or np.max(np.abs(cmass_ref - cmass)) > 0:
-                raise ValueError("cmass_scale differs between prediction files.")
+        for idx, PRED_ATMOS in enumerate(MULTI3D_PRED_DATA):
 
-        # ----------------------------
-        # TRUE log10(beta) on same cmass grid
-        # ----------------------------
-        rho = rho_list[idx]
-        z   = z_list[idx]
+            name = PRED_ATMOS["NAME"]
+            pred_file = f"sunnynet_output_3D_sim_s5_{name}_{TAG}.hdf5"
 
-        lte_true  = lte_blocks[idx]
-        nlte_true = nlte_blocks[idx]
+            with h5py.File(pred_file,"r") as f:
+                beta_pred = f["populations"][..., lev]
+                cmass = f["populations"].attrs["cmass_scale"]
 
-        beta_true = (nlte_true + EPS) / (lte_true + EPS)
-        beta_true = np.clip(beta_true, 1e-12, 1e12)        # wider clip is fine
-        logbeta_true = np.log10(beta_true)
+            rho = rho_list[idx]
+            z   = z_list[idx]
 
-        logbeta_true = interpolate_everything(rho, z, logbeta_true, cmass_ref)
+            beta_true = (
+                nlte_blocks[idx][..., lev]+EPS
+            ) / (
+                lte_blocks[idx][..., lev]+EPS
+            )
 
-        # ----------------------------
-        # PRED log10(beta)
-        # ----------------------------
-        beta_pred = np.clip(beta_pred, 1e-12, 1e12)
-        logbeta_pred = np.log10(beta_pred)
+            logbeta_true = np.log10(
+                np.clip(beta_true,1e-12,1e12)
+            )[...,None]
 
-        # ----------------------------
-        # ERROR profile vs cmass
-        # ----------------------------
-        abs_err = np.abs(logbeta_pred - logbeta_true)
-        err_profile = np.mean(abs_err, axis=(0, 1, 3))  # avg over x,y,level
+            logbeta_true = interpolate_everything(
+                rho, z, logbeta_true, cmass
+            )[...,0]
 
-        err_all.append(err_profile)
+            logbeta_pred = np.log10(
+                np.clip(beta_pred,1e-12,1e12)
+            )
 
-    return cmass_ref, np.mean(err_all, axis=0)
+            err = np.abs(
+                logbeta_pred - logbeta_true
+            )
+
+            nx, ny, nz = err.shape
+
+            X = np.repeat(np.log10(cmass), nx*ny)
+            Y = err.reshape(-1, nz).T.flatten()
+
+            X_all.append(X)
+            Y_all.append(Y)
+
+        results.append((
+            np.concatenate(X_all),
+            np.concatenate(Y_all)
+        ))
+
+    return results
 
 
-def plot_overlay_diagnostics(
-    cmass,
-    nlte_strength,
-    ml_error,
-    savepath="NLTE_vs_ML_error.pdf"
-):
+def plot_density_grid(
+        level_data,
+        ylabel,
+        savepath,
+        ncols=3):
 
-    plt.rcParams.update({
-        "font.family": "serif",
-        "font.size": 12,
-        "pdf.fonttype": 42,
-    })
+    nlevel = len(level_data)
+    nrows = int(np.ceil(nlevel / ncols))
 
-    logcm = np.log10(cmass)
+    # ----------------------------------
+    # global limits
+    # ----------------------------------
+    all_y = np.concatenate([y for _, y in level_data])
 
-    fig, ax = plt.subplots(
-        figsize=(6.5,4.5)
+    ymin = 0
+    ymax = np.percentile(all_y, 99.5)
+
+    # ----------------------------------
+    # figure
+    # ----------------------------------
+    fig, axes = plt.subplots(
+        nrows,
+        ncols,
+        figsize=(4*ncols, 3.5*nrows),
+        sharex=True,
+        sharey=True
     )
 
-    ax.plot(
-        logcm,
-        nlte_strength,
-        lw=3,
-        label="Intrinsic NLTE departure"
-    )
+    axes = np.atleast_2d(axes)
 
-    ax.plot(
-        logcm,
-        ml_error,
-        lw=3,
-        linestyle="--",
-        label="SunnyNet prediction error"
-    )
+    h_last = None
 
-    ax.set_xlabel(
+    for lev, (x, y) in enumerate(level_data):
+
+        r = lev // ncols
+        c = lev % ncols
+        ax = axes[r, c]
+
+        h = ax.hist2d(
+            x,
+            y,
+            bins=[220, 220],
+            cmap="inferno",
+            norm=LogNorm(),
+            range=[
+                [np.min(x), np.max(x)],
+                [ymin, ymax]
+            ]
+        )
+
+        h_last = h
+
+        ax.set_title(f"Level {lev}")
+        ax.invert_xaxis()
+        ax.grid(alpha=0.2)
+
+    # remove empty panels
+    for k in range(nlevel, nrows*ncols):
+        fig.delaxes(axes.flat[k])
+
+    # ----------------------------------
+    # labels
+    # ----------------------------------
+    fig.supxlabel(
         r"$\log_{10}(\mathrm{Column\ Mass}\,[g\,cm^{-2}])$"
     )
 
-    ax.set_ylabel(
-        r"Mean $|\Delta \log_{10}\beta|$"
+    fig.supylabel(ylabel)
+
+    # ----------------------------------
+    # shared colorbar
+    # ----------------------------------
+    cbar = fig.colorbar(
+        h_last[3],
+        ax=axes,
+        shrink=0.92
     )
-
-    ax.grid(alpha=0.3)
-    ax.legend()
-
-    ax.invert_xaxis()
+    cbar.set_label("Counts")
 
     plt.tight_layout()
 
@@ -533,10 +607,9 @@ def plot_overlay_diagnostics(
         bbox_inches="tight"
     )
 
-    print(f"Saved → {savepath}")
-
     plt.close(fig)
 
+    print(f"Saved → {savepath}")
 
 # ------------------------------------------------------------
 # MAIN
@@ -578,10 +651,31 @@ def main():
         nlte_blocks,
     ) = load_training_multi3d_data()
 
-    cmass, nlte_strength = training_departure_profile(rho_list, z_list, lte_blocks, nlte_blocks)
-    _, ml_error = prediction_error_profile(rho_list, z_list, lte_blocks, nlte_blocks)
+    intrinsic = training_departure_density_per_level(
+        rho_list,
+        z_list,
+        lte_blocks,
+        nlte_blocks
+    )
 
-    plot_overlay_diagnostics(cmass, nlte_strength, ml_error)
+    plot_density_grid(
+        intrinsic,
+        ylabel=r"$|\log_{10}\beta|$",
+        savepath="NLTE_intrinsic_levels.pdf"
+    )
+
+    ml = prediction_error_density_per_level(
+        rho_list,
+        z_list,
+        lte_blocks,
+        nlte_blocks
+    )
+
+    plot_density_grid(
+        ml,
+        ylabel=r"$|\Delta \log_{10}\beta|$",
+        savepath="SunnyNet_error_levels.pdf"
+    )
 
     print("\n=== PIPELINE COMPLETE ===")
 
