@@ -2,7 +2,7 @@ import os
 import numpy as np
 import h5py
 import SunnyNet
-
+import json
 from helita.sim.multi3d import Multi3dAtmos, Multi3dOut
 import matplotlib.pyplot as plt
 from interp_utils import interpolate_everything
@@ -557,7 +557,44 @@ def compute_percentile_profiles(x, y, cmass_grid):
     return median, p16, p84, p2, p98
 
 
-from matplotlib.colors import LogNorm
+def quantify_level(y_error, y_intrinsic):
+
+    stats = {}
+
+    stats["median"] = np.median(y_error)
+    stats["p95"] = np.percentile(y_error,95)
+
+    stats["catastrophic_frac"] = np.mean(
+        y_error > 0.5
+    )
+
+    stats["width68"] = (
+        np.percentile(y_error,84)
+        - np.percentile(y_error,16)
+    )
+
+    ratio = y_error/(y_intrinsic+1e-6)
+
+    stats["physics_ratio"] = np.median(ratio)
+
+    return stats
+
+
+def quantify_all_levels(error_levels,
+                        intrinsic_levels):
+
+    results = []
+
+    for lev in range(len(error_levels)):
+
+        _, err = error_levels[lev]
+        _, intr = intrinsic_levels[lev]
+
+        results.append(
+            quantify_level(err,intr)
+        )
+
+    return results
 
 
 def plot_density_grid_with_stats(
@@ -686,7 +723,7 @@ def main():
     ) = load_training_multi3d_data()
 
     cmass_grid = np.logspace(-6, 2, NDEP)
-    
+
     intrinsic = training_departure_density_per_level(
         rho_list,
         z_list,
@@ -715,6 +752,33 @@ def main():
         "SunnyNet_error_levels_stats.pdf"
     )
 
+    # --------------------------------------------------
+    # QUANTIFY PERFORMANCE
+    # --------------------------------------------------
+
+    stats = quantify_all_levels(
+        ml,
+        intrinsic
+    )
+
+    print("\n=== LEVEL STATISTICS ===")
+
+    for lev, s in enumerate(stats):
+
+        print(
+            f"""
+            Level {lev}
+            -----------
+            Median error        : {s['median']:.3f}
+            P95 error           : {s['p95']:.3f}
+            Catastrophic frac   : {s['catastrophic_frac']:.3f}
+            Width68             : {s['width68']:.3f}
+            Physics ratio       : {s['physics_ratio']:.3f}
+            """
+        )
+
+    with open(f"diagnostics_{TAG}.json","w") as f:
+        json.dump(stats, f, indent=2)
 
     print("\n=== PIPELINE COMPLETE ===")
 
