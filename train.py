@@ -685,6 +685,8 @@ def main():
         nlte_blocks,
     ) = load_training_multi3d_data()
 
+    cmass_grid = np.logspace(-6, 2, NDEP)
+    
     intrinsic = training_departure_density_per_level(
         rho_list,
         z_list,
@@ -712,7 +714,7 @@ def main():
         r"$|\Delta\log_{10}\beta|$",
         "SunnyNet_error_levels_stats.pdf"
     )
-    
+
 
     print("\n=== PIPELINE COMPLETE ===")
 
