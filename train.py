@@ -561,21 +561,23 @@ def quantify_level(y_error, y_intrinsic):
 
     stats = {}
 
-    stats["median"] = np.median(y_error)
-    stats["p95"] = np.percentile(y_error,95)
+    stats["median"] = float(np.median(y_error))
+    stats["p95"] = float(np.percentile(y_error, 95))
 
-    stats["catastrophic_frac"] = np.mean(
-        y_error > 0.5
+    stats["catastrophic_frac"] = float(
+        np.mean(y_error > 0.5)
     )
 
-    stats["width68"] = (
-        np.percentile(y_error,84)
-        - np.percentile(y_error,16)
+    stats["width68"] = float(
+        np.percentile(y_error, 84)
+        - np.percentile(y_error, 16)
     )
 
-    ratio = y_error/(y_intrinsic+1e-6)
-
-    stats["physics_ratio"] = np.median(ratio)
+    # safer physics ratio
+    stats["physics_ratio"] = float(
+        np.median(y_error) /
+        (np.median(y_intrinsic) + 1e-6)
+    )
 
     return stats
 
@@ -778,7 +780,12 @@ def main():
         )
 
     with open(f"diagnostics_{TAG}.json","w") as f:
-        json.dump(stats, f, indent=2)
+        json.dump(
+            stats,
+            f,
+            indent=2,
+            default=lambda x: float(x)
+        )
 
     print("\n=== PIPELINE COMPLETE ===")
 
