@@ -546,7 +546,8 @@ def plot_density_grid(
         ncols,
         figsize=(4*ncols, 3.5*nrows),
         sharex=True,
-        sharey=True
+        sharey=True,
+        constrained_layout=True
     )
 
     axes = np.atleast_2d(axes)
@@ -595,12 +596,11 @@ def plot_density_grid(
     # ----------------------------------
     cbar = fig.colorbar(
         h_last[3],
-        ax=axes,
-        shrink=0.92
+        ax=axes.ravel().tolist(),
+        shrink=0.9
     )
-    cbar.set_label("Counts")
 
-    plt.tight_layout()
+    cbar.set_label("Counts")
 
     fig.savefig(
         savepath,
