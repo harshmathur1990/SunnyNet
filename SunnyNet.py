@@ -298,25 +298,6 @@ def read_solve_params(solve_file):
 
 
 # ============================================================
-# ---------------- MODEL COMPAT -------------------------------
-# ============================================================
-
-def check_model_compat(model_type, pad):
-
-    mapping = {
-        "SunnyNet_1x1": 0,
-        "SunnyNet_3x3": 1,
-        "SunnyNet_5x5": 2,
-        "SunnyNet_7x7": 3,
-    }
-
-    if model_type not in mapping:
-        raise ValueError(model_type)
-
-    return mapping[model_type] == pad
-
-
-# ============================================================
 # ---------------- TRAIN MODEL (API) --------------------------
 # ============================================================
 
@@ -340,11 +321,9 @@ def sunnynet_train_model(
 
     tr, te, Cin, Cout, ndep, pad = read_train_params(train_path)
 
-    if not check_model_compat(model_type, pad):
-        raise ValueError("Model/window mismatch")
-
     params = dict(
-        model=model_type,
+        model='SunnyNet',
+        window_size=2*pad+1,
         optimizer="Adam",
         loss_fxn=loss_function,
         learn_rate=1e-3,
@@ -431,7 +410,8 @@ def sunnynet_predict_populations(
 
     pred_config = dict(
         cuda=cuda,
-        model=model_type,
+        model='SunnyNet',
+        window_size=2*pad+1,
         model_path=model_path,
         in_channels=Cin,
         out_channels=Cout,
