@@ -521,30 +521,59 @@ def prediction_error_density_per_level(
     return results
 
 
-def plot_density_grid(
+def compute_percentile_profiles(x, y, cmass_grid):
+
+    logcm = np.log10(cmass_grid)
+
+    median = np.zeros_like(logcm)
+    p16 = np.zeros_like(logcm)
+    p84 = np.zeros_like(logcm)
+    p2 = np.zeros_like(logcm)
+    p98 = np.zeros_like(logcm)
+
+    # small bin around each cmass
+    dx = np.abs(logcm[1] - logcm[0]) * 0.5
+
+    for i, xc in enumerate(logcm):
+
+        mask = (x > xc - dx) & (x < xc + dx)
+
+        if np.sum(mask) < 50:
+            median[i] = np.nan
+            p16[i] = np.nan
+            p84[i] = np.nan
+            p2[i] = np.nan
+            p98[i] = np.nan
+            continue
+
+        vals = y[mask]
+
+        median[i] = np.percentile(vals, 50)
+        p16[i] = np.percentile(vals, 16)
+        p84[i] = np.percentile(vals, 84)
+        p2[i] = np.percentile(vals, 2.5)
+        p98[i] = np.percentile(vals, 97.5)
+
+    return median, p16, p84, p2, p98
+
+
+from matplotlib.colors import LogNorm
+
+
+def plot_density_grid_with_stats(
         level_data,
+        cmass_grid,
         ylabel,
         savepath,
         ncols=3):
 
     nlevel = len(level_data)
-    nrows = int(np.ceil(nlevel / ncols))
+    nrows = int(np.ceil(nlevel/ncols))
 
-    # ----------------------------------
-    # global limits
-    # ----------------------------------
-    all_y = np.concatenate([y for _, y in level_data])
-
-    ymin = 0
-    ymax = np.percentile(all_y, 99.5)
-
-    # ----------------------------------
-    # figure
-    # ----------------------------------
     fig, axes = plt.subplots(
         nrows,
         ncols,
-        figsize=(4*ncols, 3.5*nrows),
+        figsize=(4*ncols,3.5*nrows),
         sharex=True,
         sharey=True,
         constrained_layout=True
@@ -552,64 +581,69 @@ def plot_density_grid(
 
     axes = np.atleast_2d(axes)
 
+    logcm = np.log10(cmass_grid)
+
     h_last = None
 
-    for lev, (x, y) in enumerate(level_data):
+    for lev,(x,y) in enumerate(level_data):
 
-        r = lev // ncols
-        c = lev % ncols
-        ax = axes[r, c]
+        r = lev//ncols
+        c = lev%ncols
+        ax = axes[r,c]
 
+        # ---------------- density ----------------
         h = ax.hist2d(
-            x,
-            y,
-            bins=[220, 220],
+            x,y,
+            bins=[220,220],
             cmap="inferno",
-            norm=LogNorm(),
-            range=[
-                [np.min(x), np.max(x)],
-                [ymin, ymax]
-            ]
+            norm=LogNorm()
         )
 
         h_last = h
 
+        # ---------------- statistics ----------------
+        med,p16,p84,p2,p98 = compute_percentile_profiles(
+            x,y,cmass_grid
+        )
+
+        # 95% envelope
+        ax.plot(logcm,p2,'w--',lw=1,alpha=0.8)
+        ax.plot(logcm,p98,'w--',lw=1,alpha=0.8)
+
+        # 68% band
+        ax.fill_between(
+            logcm,p16,p84,
+            color="white",
+            alpha=0.25
+        )
+
+        # median
+        ax.plot(logcm,med,'w',lw=2)
+
         ax.set_title(f"Level {lev}")
         ax.invert_xaxis()
-        ax.grid(alpha=0.2)
 
     # remove empty panels
-    for k in range(nlevel, nrows*ncols):
+    for k in range(nlevel,nrows*ncols):
         fig.delaxes(axes.flat[k])
 
-    # ----------------------------------
-    # labels
-    # ----------------------------------
     fig.supxlabel(
-        r"$\log_{10}(\mathrm{Column\ Mass}\,[g\,cm^{-2}])$"
+        r"$\log_{10}(\mathrm{Column\ Mass})$"
     )
-
     fig.supylabel(ylabel)
 
-    # ----------------------------------
-    # shared colorbar
-    # ----------------------------------
     cbar = fig.colorbar(
         h_last[3],
         ax=axes.ravel().tolist(),
         shrink=0.9
     )
-
     cbar.set_label("Counts")
 
-    fig.savefig(
-        savepath,
-        bbox_inches="tight"
-    )
-
+    fig.savefig(savepath,bbox_inches="tight")
     plt.close(fig)
 
     print(f"Saved → {savepath}")
+
 
 # ------------------------------------------------------------
 # MAIN
@@ -658,10 +692,11 @@ def main():
         nlte_blocks
     )
 
-    plot_density_grid(
+    plot_density_grid_with_stats(
         intrinsic,
-        ylabel=r"$|\log_{10}\beta|$",
-        savepath="NLTE_intrinsic_levels.pdf"
+        cmass_grid,
+        r"$|\log_{10}\beta|$",
+        "NLTE_intrinsic_levels_stats.pdf"
     )
 
     ml = prediction_error_density_per_level(
@@ -671,11 +706,13 @@ def main():
         nlte_blocks
     )
 
-    plot_density_grid(
+    plot_density_grid_with_stats(
         ml,
-        ylabel=r"$|\Delta \log_{10}\beta|$",
-        savepath="SunnyNet_error_levels.pdf"
+        cmass_grid,
+        r"$|\Delta\log_{10}\beta|$",
+        "SunnyNet_error_levels_stats.pdf"
     )
+    
 
     print("\n=== PIPELINE COMPLETE ===")
 
