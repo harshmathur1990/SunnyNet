@@ -86,18 +86,6 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
     '''
     Runs epoch given the params in train()
     '''
-    
-    X_size = model.network.height
-    if X_size == 1:
-        k = 0
-    elif X_size == 3:
-        k = 1
-    elif X_size == 5:
-        k = 2
-    elif X_size == 7:
-        k = 3
-    else:
-        raise AttributeError('Currently only support models with square X/Y input dimmensions of: 1, 3, 5, 7')
            
     epoch_loss = 0.0
     loss_data_running = 0.0
