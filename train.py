@@ -598,7 +598,7 @@ def main():
         intrinsic,
         cmass_grid,
         r"$|\log_{10}\beta|$",
-        f"NLTE_intrinsic_levels_stats{TAG}.pdf"
+        f"NLTE_intrinsic_levels_stats_{TAG}.pdf"
     )
 
     ml = prediction_error_density_per_level(
