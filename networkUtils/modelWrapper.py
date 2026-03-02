@@ -6,49 +6,16 @@ from networkUtils.physicsloss import *
 
 class Model():
     def __init__(self, params):
-        '''
-        Model wrapper class to setup a model depending on parameters.
-        
-        params = {
-        
-        'model': (str),                                    # class of model from modelArchitectures.py
-        'optimizer': (str),                                # optimizer for model from torch.optim, currently only using 'Adam'
-        'loss_fxn': (str),                                 # one of the loss functions from lossFunctions.py or torch.nn
-        'learn_rate': (float),                             # starting learning rate
-        'channels': (int),                                 # channels (energy levels) of input data of shape [ch, z, x, y]
-        'features': (int),                                 # number of depth points. z in [ch, z, x, y]
-        #'loss_w_range': (tuple),                          # range in Mm to weight loss function (not working since we switched to column mass)
-        #'loss_scale': (float),                            # scale weight loss function (not working since we switched to column mass)
-        #'height_vector': (np array),                      # atmosphere height vector in Mm (not working since we switched to column mass)
-        'cuda': {'use_cuda': (bool), 'multi_gpu': (bool)}, # whether to use cuda and multi GPU when training
-        'mode': (string)                                   # either 'training' or 'testing'
-        
-        }        
-        '''
-
 
         ## plotting only needs 1 forward pass so this gets skipped ##
         if params['mode'] == 'training':
-        
-        
-            # ######################### SUNNYNET ARCHITECTURES ############################ 
-            # if params['model'] == 'SunnyNet_1x1':
-            #     self.network = SunnyNet_1x1(params['in_channels'], params['features'],1,1)
-                
-            # elif params['model'] == 'SunnyNet_3x3':
-            #     self.network = SunnyNet_3x3(params['in_channels'], params['out_channels'], params['features'],3,3)
-                
-            # elif params['model'] == 'SunnyNet_5x5':
-            #     self.network = SunnyNet_5x5(params['in_channels'], params['out_channels'], params['features'],5,5)
-                
-            # elif params['model'] == 'SunnyNet_7x7':
-            #     self.network = SunnyNet_7x7(params['in_channels'], params['out_channels'], params['features'],7,7)
-            # ######################### SUNNYNET ARCHITECTURES ############################
-            
-            # else:
-            #     raise Exception("!!Invalid model architecture!!")
 
-            self.network = SunnyNet(params['in_channels'], params['out_channels'], params['features'], params['window_size'])
+            self.network = SunnyNet(
+                params['in_channels'],
+                params['out_channels'],
+                params['features'],
+                params['window_size']
+            )
 
             ## set CPU/GPU ##
             if params['cuda']['use_cuda']:
@@ -103,22 +70,13 @@ class Model():
         
         ## plotting mode, just a forward pass
         elif params['mode'] == 'testing':
-            
-            ######################### SUNNYNET ARCHITECTURES ############################ 
-            # elif params['model'] == 'SunnyNet_1x1':
-            #     self.network = SunnyNet_1x1(params['in_channels'], params['out_channels'], params['features'],1,1)
                 
-            # elif params['model'] == 'SunnyNet_3x3':
-            #     self.network = SunnyNet_3x3(params['in_channels'], params['out_channels'], params['features'],3,3)
-                
-            # elif params['model'] == 'SunnyNet_5x5':
-            #     self.network = SunnyNet_5x5(params['in_channels'], params['out_channels'], params['features'],5,5)
-                
-            # elif params['model'] == 'SunnyNet_7x7':
-            #     self.network = SunnyNet_7x7(params['in_channels'], params['out_channels'], params['features'],7,7)
-            ######################### SUNNYNET ARCHITECTURES ############################
-                
-            self.network = SunnyNet(params['in_channels'], params['out_channels'], params['features'], params['window_size'])
+            self.network = SunnyNet(
+                params['in_channels'],
+                params['out_channels'],
+                params['features'],
+                params['window_size']
+            )
                            
             ## set CPU/GPU ##
             if params['cuda']:
