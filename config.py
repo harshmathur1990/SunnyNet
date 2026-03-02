@@ -120,8 +120,10 @@ PAD = 1
 WINDOW = 2 * PAD + 1
 TAG = f"{WINDOW}x{WINDOW}"
 
-TRAIN_FILE   = f"3D_sim_train_s123_{TAG}.hdf5"
-MODEL_DIR  = f"training_{TAG}/"
-MODEL_FILE = f"3D_sim_train_s123_{TAG}.pt"
+
 # MODEL_TYPE = "SunnyNet"
 MODEL_TYPE = "ContextToColumn3D"
+
+TRAIN_FILE   = f"3D_sim_train_s123_{TAG}.hdf5"
+MODEL_DIR  = f"training_{MODEL_TYPE}_{TAG}/"
+MODEL_FILE = f"3D_sim_train_s123_{TAG}.pt"

@@ -247,7 +247,7 @@ def predict():
 
         PREDICT_FILE = f"3D_sim_predict_{PRED_ATMOS['NAME']}_{TAG}.hdf5"
 
-        OUTPUT_FILE  = f"sunnynet_output_3D_sim_s5_{PRED_ATMOS['NAME']}_{TAG}.hdf5"
+        OUTPUT_FILE  = f"sunnynet_output_3D_sim_s5_{PRED_ATMOS['NAME']}_{MODEL_TYPE}_{TAG}.hdf5"
 
         if not os.path.exists(OUTPUT_FILE):
 
