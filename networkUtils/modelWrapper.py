@@ -10,12 +10,27 @@ class Model():
         ## plotting only needs 1 forward pass so this gets skipped ##
         if params['mode'] == 'training':
 
-            self.network = SunnyNet(
-                params['in_channels'],
-                params['out_channels'],
-                params['features'],
-                params['window_size']
-            )
+            if params['model'] == 'SunnyNet':
+                self.network = SunnyNet(
+                    params['in_channels'],
+                    params['out_channels'],
+                    params['features'],
+                    params['window_size']
+                )
+            elif params['model'] == 'ContextToColumn3D':
+                self.network = ContextToColumn3D(
+                    params['in_channels'],
+                    params['out_channels'],
+                    params['features'],
+                    params['window_size']
+                )
+                print ("Using ContextToColumn3D model")
+            else:
+                raise Exception(
+                    "!!Invalid Model: {}!!".format(
+                        params['model']
+                        )
+                    )
 
             ## set CPU/GPU ##
             if params['cuda']['use_cuda']:
@@ -71,12 +86,27 @@ class Model():
         ## plotting mode, just a forward pass
         elif params['mode'] == 'testing':
                 
-            self.network = SunnyNet(
-                params['in_channels'],
-                params['out_channels'],
-                params['features'],
-                params['window_size']
-            )
+            if params['model'] == 'SunnyNet':
+                self.network = SunnyNet(
+                    params['in_channels'],
+                    params['out_channels'],
+                    params['features'],
+                    params['window_size']
+                )
+            elif params['model'] == 'ContextToColumn3D':
+                self.network = ContextToColumn3D(
+                    params['in_channels'],
+                    params['out_channels'],
+                    params['features'],
+                    params['window_size']
+                )
+                print ("Using ContextToColumn3D model")
+            else:
+                raise Exception(
+                    "!!Invalid Model: {}!!".format(
+                        params['model']
+                        )
+                    )
                            
             ## set CPU/GPU ##
             if params['cuda']:

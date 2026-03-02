@@ -310,7 +310,7 @@ def sunnynet_train_model(
     chi,
     levels,
     atom_names,
-    model_type="SunnyNet_3x3",
+    model_type="SunnyNet",
     loss_function="MSELoss",
     cuda=True,
     multi_gpu=False,
@@ -322,7 +322,7 @@ def sunnynet_train_model(
     tr, te, Cin, Cout, ndep, pad = read_train_params(train_path)
 
     params = dict(
-        model='SunnyNet',
+        model=model_type,
         window_size=2*pad+1,
         optimizer="Adam",
         loss_fxn=loss_function,
@@ -394,7 +394,7 @@ def sunnynet_predict_populations(
     levels,
     atom_names,
     cuda=True,
-    model_type="SunnyNet_3x3",
+    model_type="SunnyNet",
     loss_function="MSELoss",
 ):
 
@@ -410,7 +410,7 @@ def sunnynet_predict_populations(
 
     pred_config = dict(
         cuda=cuda,
-        model='SunnyNet',
+        model=model_type,
         window_size=2*pad+1,
         model_path=model_path,
         in_channels=Cin,
