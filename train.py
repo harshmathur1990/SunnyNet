@@ -206,9 +206,9 @@ def train_model():
         levels=levels,
         atom_names=atom_names,
         model_type=MODEL_TYPE,
-        cuda=True,
         loss_function="PhysicsLoss",
-
+        cuda=True,
+        multi_gpu=MULTI_GPU
     )
 
 # ------------------------------------------------------------
