@@ -557,7 +557,7 @@ def main():
 
     atmos = None
     # ---- TRAINING ----
-    if not os.path.exists(TRAIN_FILE):
+    if not os.path.exists(IODIR + TRAIN_FILE):
         atmos, rho, z, temp, vx, vy, vz, ne, lte, nlte = load_training_multi3d_data()
         build_training(temp, vx, vy, vz, ne, lte, nlte, rho, z)
 
