@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from networkUtils.modelArchitectures import *
-from context_to_column_3D import ContextToColumn3D
+from networkUtils.context_to_column_3D import ContextToColumn3D
 from networkUtils.lossFunctions import *
 from networkUtils.physicsloss import *
 
