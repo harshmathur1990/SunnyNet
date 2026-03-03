@@ -165,6 +165,8 @@ def run_epoch(mode, model, cur_epoch, dataLoaders, verbose = True):
         if mode == 'train':
             model.optimizer.zero_grad()
             batch_loss.backward()
+            if hasattr(model.network, "collect_gradient_stats"):
+                model.network.collect_gradient_stats()
             model.optimizer.step()
 
         epoch_loss += batch_loss.item()

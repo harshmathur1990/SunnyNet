@@ -222,13 +222,9 @@ class ContextToColumn3D(nn.Module):
         self.collapse.register_forward_hook(make_forward_hook("collapse"))
         self.column_net.register_forward_hook(make_forward_hook("column"))
 
-        self.stem.register_full_backward_hook(make_backward_hook("stem"))
-        self.collapse.register_full_backward_hook(make_backward_hook("collapse"))
-        self.column_net.register_full_backward_hook(make_backward_hook("column"))
 
         if hasattr(self, "center_net"):
             self.center_net.register_forward_hook(make_forward_hook("center"))
-            self.center_net.register_full_backward_hook(make_backward_hook("center"))
 
     def measure_context_sensitivity(self, X):
         if not self.training:
@@ -245,4 +241,22 @@ class ContextToColumn3D(nn.Module):
 
                 delta = torch.norm(y_normal - y_center) / (torch.norm(y_normal) + 1e-12)
                 return delta.item()
+
+    def collect_gradient_stats(self):
+        if not self.diagnostics_enabled:
+            return
+
+        def grad_norm(module):
+            total = 0.0
+            for p in module.parameters():
+                if p.grad is not None:
+                    total += p.grad.norm().item()
+            return total
+
+        self.diagnostics.add_grad("stem", torch.tensor(grad_norm(self.stem)))
+        self.diagnostics.add_grad("collapse", torch.tensor(grad_norm(self.collapse)))
+        self.diagnostics.add_grad("column", torch.tensor(grad_norm(self.column_net)))
+
+        if hasattr(self, "center_net"):
+            self.diagnostics.add_grad("center", torch.tensor(grad_norm(self.center_net)))
 
