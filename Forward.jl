@@ -63,10 +63,10 @@ const CONFIG_ML = (
     mesh_file  = "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/mesh",
     atmos_file = "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/atm3d",
 
-    pred_h5  = "sunnynet_output_3D_sim_s5_en024048_hion_385_11x11.hdf5",
+    pred_h5  = "sunnynet_output_3D_sim_s5_en024048_hion_385_ContextToColumn3D_7x7.hdf5",
     pred_key = "populations",
 
-    out_h5     = "intensity_ml_en024048_hion_385_11x11.h5",
+    out_h5     = "intensity_ml_en024048_hion_385_ContextToColumn3D_7x7.h5",
     out_prefix = "diag_ml",
 
     x_pick     = 33,
