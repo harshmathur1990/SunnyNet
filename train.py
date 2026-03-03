@@ -183,7 +183,7 @@ def build_training(temp, vx, vy, vz, ne, lte, nlte, rho, z):
         temp, vx, vy, vz,
         ne, lte, nlte,
         rho, z,
-        save_path=TRAIN_FILE,
+        save_path=IODIR + TRAIN_FILE,
         ndep=NDEP,
         pad=PAD,
         tr_percent=85
@@ -197,7 +197,7 @@ def train_model():
     print("\n=== TRAIN MODEL ===")
 
     SunnyNet.sunnynet_train_model(
-        TRAIN_FILE,
+        IODIR + TRAIN_FILE,
         MODEL_DIR,
         MODEL_FILE,
         lines=lines,
@@ -231,7 +231,7 @@ def build_solving():
 
             SunnyNet.build_solving_set(
                 rho, z_scale, temp, vx, vy, vz, ne,
-                save_path=PREDICT_FILE,
+                save_path=IODIR + PREDICT_FILE,
                 ndep=NDEP,
                 pad=PAD
             )
@@ -245,9 +245,9 @@ def predict():
 
     for PRED_ATMOS in MULTI3D_PRED_DATA:
 
-        PREDICT_FILE = f"3D_sim_predict_{PRED_ATMOS['NAME']}_{TAG}.hdf5"
+        PREDICT_FILE = IODIR + f"3D_sim_predict_{PRED_ATMOS['NAME']}_{TAG}.hdf5"
 
-        OUTPUT_FILE  = f"sunnynet_output_3D_sim_s5_{PRED_ATMOS['NAME']}_{MODEL_TYPE}_{TAG}.hdf5"
+        OUTPUT_FILE  = MODEL_DIR + f"sunnynet_output_3D_sim_s5_{PRED_ATMOS['NAME']}_{MODEL_TYPE}_{TAG}.hdf5"
 
         if not os.path.exists(OUTPUT_FILE):
 
@@ -555,6 +555,7 @@ def plot_density_grid_with_stats(
 # ------------------------------------------------------------
 def main():
 
+    atmos = None
     # ---- TRAINING ----
     if not os.path.exists(TRAIN_FILE):
         atmos, rho, z, temp, vx, vy, vz, ne, lte, nlte = load_training_multi3d_data()
@@ -571,19 +572,20 @@ def main():
     # ---- PREDICT ----
     predict()
 
-    # ---- Load training blocks once (for diagnostics) ----
-    (
-        atmos_list,
-        rho_list,
-        z_list,
-        temp_list,
-        vx_list,
-        vy_list,
-        vz_list,
-        ne_list,
-        lte_blocks,
-        nlte_blocks,
-    ) = load_training_multi3d_data()
+    if atmos is None:
+        # ---- Load training blocks once (for diagnostics) ----
+        (
+            atmos_list,
+            rho_list,
+            z_list,
+            temp_list,
+            vx_list,
+            vy_list,
+            vz_list,
+            ne_list,
+            lte_blocks,
+            nlte_blocks,
+        ) = load_training_multi3d_data()
 
     cmass_grid = np.logspace(-6, 2, NDEP)
 
@@ -598,7 +600,7 @@ def main():
         intrinsic,
         cmass_grid,
         r"$|\log_{10}\beta|$",
-        f"NLTE_intrinsic_levels_stats_{TAG}.pdf"
+        MODEL_DIR + f"NLTE_intrinsic_levels_stats_{MODEL_TYPE}_{TAG}.pdf"
     )
 
     ml = prediction_error_density_per_level(
@@ -612,7 +614,7 @@ def main():
         ml,
         cmass_grid,
         r"$|\Delta\log_{10}\beta|$",
-        f"SunnyNet_error_levels_stats_{TAG}.pdf"
+        MODEL_DIR + f"SunnyNet_error_levels_stats_{MODEL_TYPE}_{TAG}.pdf"
     )
 
     # --------------------------------------------------
@@ -640,7 +642,7 @@ def main():
             """
         )
 
-    with open(f"diagnostics_{TAG}.json","w") as f:
+    with open(MODEL_DIR + f"diagnostics_{MODEL_TYPE}_{TAG}.json","w") as f:
         json.dump(
             stats,
             f,

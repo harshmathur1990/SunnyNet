@@ -8,26 +8,7 @@ from networkUtils.modelWrapper import Model
 from torch.utils.data import DataLoader
 
 def predict_populations(pop_path, train_data_path, config):
-    '''
-    Function to predict NLTE populations of prepared data file of
-    3x3x400 LTE test points.
-    
-    train_data_path (str)      # path to training data for model, need it for data scaling
-    pop_path (str)             # path to file of 3x3x400 testing data points from 1_build_solving_set.py
-    
-     config={       
-        'cuda': (bool),                # whether to use CUDA for forward pass 
-        'model': (str),                # class of model from modelArchitectures.py
-        'model_path': (str),           # path to trained model
-        'in_channels': (int),             # channels (number of atmospheric params) of input data of shape [ch, z, x, y]
-        'out_channels': (int),             # channels (energy levels) of input data of shape [ch, z, x, y]
-        'features': (int),             # number of depth points. z in [ch, z, x, y]
-        'mode': (str),                 # either 'testing' or 'training', going to be testing for this
-        'multi_gpu_train': (bool),     # whether the model was traine on multiple GPUs or just 1
-        'loss_fxn': (str),             # one of the loss functions from torch.nn
-        'output_XY': (int),            # X/Y size of output populations
-    }
-    '''
+
     train_data = PopulationDataset3d(train_data_path, train = False)
 
     ##### LOAD MODEL #####
@@ -53,6 +34,9 @@ def predict_populations(pop_path, train_data_path, config):
         model.network.to('cpu')
     model.network.eval()
     
+    if hasattr(model.network, "enable_diagnostics"):
+        model.network.enable_diagnostics()
+
     with h5py.File(pop_path, 'r') as f:
         lte = f['lte test windows'][:]
 
@@ -68,10 +52,28 @@ def predict_populations(pop_path, train_data_path, config):
             model.network.eval()
             X = point[0].to(model.device, torch.float, non_blocking=True)
             y_pred = model.network(X)
+            # Optional context sensitivity measurement
+            if hasattr(model.network, "measure_context_sensitivity"):
+                delta = model.network.measure_context_sensitivity(X)
+                if hasattr(model.network, "diagnostics"):
+                    model.network.diagnostics.add_forward("context_sensitivity", torch.tensor(delta))
             pred_list.append(y_pred)
     
     print(f'Fixing up dimensions...')
     pred_list = torch.cat(pred_list, dim = 0)
+
+    # 🔥 Save prediction diagnostics
+    if hasattr(model.network, "get_diagnostics"):
+        stats = model.network.get_diagnostics()
+
+        import json
+        diag_path = os.path.join(os.path.dirname(pop_path), "predict_diagnostics.json")
+
+        with open(diag_path, "w") as f:
+            json.dump(stats, f, indent=2)
+
+        print(f"Prediction diagnostics saved to {diag_path}")
+
     pred_final = pred_list.squeeze(3).squeeze(3).detach().cpu().numpy()
     pred_final = numpy.transpose(pred_final,(0,2,1))
 

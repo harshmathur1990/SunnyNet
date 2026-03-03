@@ -7,6 +7,10 @@ import torch.nn as nn
 
 
 def train(params, model, dataLoaders):
+
+    if hasattr(model.network, "enable_diagnostics"):
+        model.network.enable_diagnostics()
+
     full_path = os.path.join(params['save_folder'], params['model_save'])
     loss_dict = {'train':[], 'val':[]}
     no_improv = 0
@@ -41,6 +45,17 @@ def train(params, model, dataLoaders):
             print(f'Early stopping condition met, stopping at epoch {epoch}...')
             break
             
+    if hasattr(model.network, "get_diagnostics"):
+        stats = model.network.get_diagnostics()
+
+        import json
+        diag_path = os.path.join(params['save_folder'], "model_diagnostics.json")
+
+        with open(diag_path, "w") as f:
+            json.dump(stats, f, indent=2)
+
+        print(f"Diagnostics saved to {diag_path}")
+
     return loss_dict
 
 

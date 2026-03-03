@@ -116,7 +116,7 @@ MULTI3D_PRED_DATA = [
 
 
 NDEP = 400
-PAD = 1
+PAD = 3
 WINDOW = 2 * PAD + 1
 TAG = f"{WINDOW}x{WINDOW}"
 
@@ -125,6 +125,9 @@ TAG = f"{WINDOW}x{WINDOW}"
 MODEL_TYPE = "ContextToColumn3D"
 MULTI_GPU = True
 
+IODIR = "IO/"
 TRAIN_FILE   = f"3D_sim_train_s123_{TAG}.hdf5"
 MODEL_DIR  = f"training_{MODEL_TYPE}_{TAG}/"
 MODEL_FILE = f"3D_sim_train_s123_{TAG}.pt"
+
+
