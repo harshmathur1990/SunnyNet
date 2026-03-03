@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import math
 from tqdm import tqdm
+import torch.nn as nn
 
 
 def train(params, model, dataLoaders):
@@ -28,7 +29,10 @@ def train(params, model, dataLoaders):
             no_improv = 0
             min_loss = val_loss
             print(f'New min loss of {min_loss:.4f}, saving checkpoint...')
-            torch.save(model.network.state_dict(), full_path)
+            if isinstance(model.network, nn.DataParallel):
+                torch.save(model.network.module.state_dict(), full_path)
+            else:
+                torch.save(model.network.state_dict(), full_path)
         else:
             no_improv += 1
             if (epoch + 1 > params['early_stopping']) and no_improv == params['early_stopping']:

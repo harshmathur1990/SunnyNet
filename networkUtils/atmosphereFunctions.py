@@ -33,16 +33,19 @@ def predict_populations(pop_path, train_data_path, config):
     ##### LOAD MODEL #####
     model = Model(config)
     print(f'Loading model...')
-    ## fix dict keys from multi gpu training ##
-    if config['multi_gpu_train']:
-        state_dict = torch.load(config['model_path'])
-        new_state_dict = OrderedDict()
-        for k, v in state_dict.items():
-            name = k[7:] # remove module.
-            new_state_dict[name] = v
-        model.network.load_state_dict(new_state_dict)
+    state_dict = torch.load(config['model_path'], map_location='cpu')
+
+    # Detect if keys are prefixed with "module."
+    has_module_prefix = any(k.startswith("module.") for k in state_dict.keys())
+
+    if has_module_prefix:
+        new_state_dict = OrderedDict(
+            (k.replace("module.", "", 1), v) for k, v in state_dict.items()
+        )
     else:
-        model.network.load_state_dict(torch.load(config['model_path']))
+        new_state_dict = state_dict
+
+    model.network.load_state_dict(new_state_dict)
 
     if config['cuda']: 
         model.network.to('cuda')
