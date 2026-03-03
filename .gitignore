@@ -2,3 +2,8 @@
 training_*
 *.pdf
 *.png
+*.yaml
+.virtual_documents/
+.ipynb_checkpoints/
+__pycache__
+networkUtils/__pycache__/
