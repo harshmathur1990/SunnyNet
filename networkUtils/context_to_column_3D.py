@@ -38,6 +38,14 @@ class ModelDiagnostics:
 
         return summary
 
+    def add_scalar(self, name, value):
+        self.forward_stats[name].append({
+            "mean": float(value),
+            "std": 0.0,
+            "min": float(value),
+            "max": float(value),
+        })
+
 # --------------------------------------------------
 # Utilities
 # --------------------------------------------------
@@ -261,12 +269,3 @@ class ContextToColumn3D(nn.Module):
 
         if hasattr(self, "center_net"):
             self.diagnostics.add_grad("center", torch.tensor(grad_norm(self.center_net)))
-
-    def add_scalar(self, name, value):
-        self.forward_stats[name].append({
-            "mean": float(value),
-            "std": 0.0,
-            "min": float(value),
-            "max": float(value),
-        })
-
