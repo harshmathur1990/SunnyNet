@@ -426,7 +426,6 @@ def sunnynet_predict_populations(
         chi=chi,
         levels=levels,
         atom_names=atom_names,
-        model_dir=MODE,
         diagnostic_path=diagnostic_path
     )
 
