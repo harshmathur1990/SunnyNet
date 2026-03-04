@@ -81,6 +81,38 @@ class Conv1dBlock(nn.Module):
     def forward(self, x):
         return self.block(x)
 
+class Residual1DBlock(nn.Module):
+    def __init__(self, ch, k=5):
+        super().__init__()
+        p = k // 2
+        self.conv1 = nn.Conv1d(ch, ch, kernel_size=k, padding=p, bias=False)
+        self.gn1 = _gn(ch)
+        self.conv2 = nn.Conv1d(ch, ch, kernel_size=k, padding=p, bias=False)
+        self.gn2 = _gn(ch)
+        self.act = nn.GELU()
+
+    def forward(self, x):
+        y = self.act(self.gn1(self.conv1(x)))
+        y = self.gn2(self.conv2(y))
+        return self.act(x + y)
+
+
+class MultiScaleVertical(nn.Module):
+    """
+    Parallel kernels to capture different vertical coupling scales.
+    """
+    def __init__(self, ch):
+        super().__init__()
+        self.k3 = nn.Conv1d(ch, ch, 3, padding=1, bias=False)
+        self.k5 = nn.Conv1d(ch, ch, 5, padding=2, bias=False)
+        self.k9 = nn.Conv1d(ch, ch, 9, padding=4, bias=False)
+        self.gn = _gn(ch)
+        self.act = nn.GELU()
+
+    def forward(self, x):
+        y = self.k3(x) + self.k5(x) + self.k9(x)
+        return self.act(self.gn(y))
+
 
 # --------------------------------------------------
 # Main Model
@@ -151,8 +183,16 @@ class ContextToColumn3D(nn.Module):
         # Stage 3 — column physics network
         # ----------------------------------
         self.column_net = nn.Sequential(
-            Conv1dBlock(ch, 256),
-            Conv1dBlock(256, 256),
+            nn.Conv1d(ch, 256, kernel_size=1, bias=False),
+            _gn(256),
+            nn.GELU(),
+
+            MultiScaleVertical(256),
+            Residual1DBlock(256, k=5),
+            Residual1DBlock(256, k=5),
+            MultiScaleVertical(256),
+            Residual1DBlock(256, k=5),
+
             nn.Conv1d(256, out_channels, kernel_size=1),
         )
 
@@ -161,9 +201,10 @@ class ContextToColumn3D(nn.Module):
         # ----------------------------------
         if use_center_residual:
             self.center_net = nn.Sequential(
-                Conv1dBlock(in_channels, 128),
-                Conv1dBlock(128, 128),
-                nn.Conv1d(128, out_channels, kernel_size=1),
+                Conv1dBlock(in_channels, 64),
+                nn.Dropout(p=0.1),
+                Conv1dBlock(64, 64),
+                nn.Conv1d(64, out_channels, kernel_size=1),
             )
 
         self._register_internal_hooks()
