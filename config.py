@@ -123,7 +123,7 @@ TAG = f"{WINDOW}x{WINDOW}"
 
 # MODEL_TYPE = "SunnyNet"
 MODEL_TYPE = "ContextToColumn3D"
-MULTI_GPU = True
+MULTI_GPU = False
 
 IODIR = "IO/"
 TRAIN_FILE   = f"3D_sim_train_s123_{TAG}.hdf5"

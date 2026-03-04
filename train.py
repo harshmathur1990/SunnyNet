@@ -220,7 +220,7 @@ def build_solving():
 
     for PRED_ATMOS in MULTI3D_PRED_DATA:
 
-        PREDICT_FILE = f"3D_sim_predict_{PRED_ATMOS['NAME']}_{TAG}.hdf5"
+        PREDICT_FILE = IODIR + f"3D_sim_predict_{PRED_ATMOS['NAME']}_{TAG}.hdf5"
 
         if not os.path.exists(PREDICT_FILE):
 
@@ -231,7 +231,7 @@ def build_solving():
 
             SunnyNet.build_solving_set(
                 rho, z_scale, temp, vx, vy, vz, ne,
-                save_path=IODIR + PREDICT_FILE,
+                save_path=PREDICT_FILE,
                 ndep=NDEP,
                 pad=PAD
             )
@@ -253,7 +253,7 @@ def predict():
 
             SunnyNet.sunnynet_predict_populations(
                 os.path.join(MODEL_DIR, MODEL_FILE),
-                TRAIN_FILE,
+                IODIR+TRAIN_FILE,
                 PREDICT_FILE,
                 OUTPUT_FILE,
                 lines=lines,

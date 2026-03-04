@@ -180,13 +180,21 @@ class ContextToColumn3D(nn.Module):
         # [B,C,D,1,1] → [B,C,D]
         h = h.squeeze(-1).squeeze(-1)
 
-        y = self.column_net(h)
+        y_main = self.column_net(h)
 
-        # ---- residual physics shortcut ----
         if self.use_center_residual:
             c = self.window // 2
             center = x[:, :, :, c, c]
-            y = y + self.center_net(center)
+            y_center = self.center_net(center)
+
+            if self.diagnostics_enabled:
+                with torch.no_grad():
+                    self.diagnostics.add_forward("main_branch_norm", y_main)
+                    self.diagnostics.add_forward("center_branch_norm", y_center)
+
+            y = y_main + y_center
+        else:
+            y = y_main
 
         return y.unsqueeze(-1).unsqueeze(-1)
 
@@ -209,12 +217,6 @@ class ContextToColumn3D(nn.Module):
             def hook(module, inp, out):
                 if self.diagnostics_enabled:
                     self.diagnostics.add_forward(name, out)
-            return hook
-
-        def make_backward_hook(name):
-            def hook(module, grad_input, grad_output):
-                if self.diagnostics_enabled and grad_output[0] is not None:
-                    self.diagnostics.add_grad(name, grad_output[0])
             return hook
 
         # Attach to major blocks
@@ -259,4 +261,12 @@ class ContextToColumn3D(nn.Module):
 
         if hasattr(self, "center_net"):
             self.diagnostics.add_grad("center", torch.tensor(grad_norm(self.center_net)))
+
+    def add_scalar(self, name, value):
+        self.forward_stats[name].append({
+            "mean": float(value),
+            "std": 0.0,
+            "min": float(value),
+            "max": float(value),
+        })
 

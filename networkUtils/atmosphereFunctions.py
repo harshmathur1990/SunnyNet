@@ -2,6 +2,7 @@ import os
 import numpy
 import torch
 import h5py
+import json
 from collections import OrderedDict
 from networkUtils.dataSets import PopulationDataset3d
 from networkUtils.modelWrapper import Model
@@ -56,7 +57,7 @@ def predict_populations(pop_path, train_data_path, config):
             if hasattr(model.network, "measure_context_sensitivity"):
                 delta = model.network.measure_context_sensitivity(X)
                 if hasattr(model.network, "diagnostics"):
-                    model.network.diagnostics.add_forward("context_sensitivity", torch.tensor(delta))
+                    model.network.diagnostics.add_scalar("context_sensitivity", delta)
             pred_list.append(y_pred)
     
     print(f'Fixing up dimensions...')
@@ -66,7 +67,6 @@ def predict_populations(pop_path, train_data_path, config):
     if hasattr(model.network, "get_diagnostics"):
         stats = model.network.get_diagnostics()
 
-        import json
         diag_path = os.path.join(os.path.dirname(pop_path), "predict_diagnostics.json")
 
         with open(diag_path, "w") as f:
