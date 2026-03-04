@@ -8,6 +8,7 @@ from networkUtils.dataSets import PopulationDataset3d
 from networkUtils.modelWrapper import Model
 from torch.utils.data import DataLoader
 
+
 def predict_populations(pop_path, train_data_path, config):
 
     train_data = PopulationDataset3d(train_data_path, train = False)
@@ -67,7 +68,7 @@ def predict_populations(pop_path, train_data_path, config):
     if hasattr(model.network, "get_diagnostics"):
         stats = model.network.get_diagnostics()
 
-        diag_path = os.path.join(os.path.dirname(pop_path), "predict_diagnostics.json")
+        diag_path = config["diagnostic_path"]
 
         with open(diag_path, "w") as f:
             json.dump(stats, f, indent=2)

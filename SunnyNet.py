@@ -388,6 +388,7 @@ def sunnynet_predict_populations(
     train_path,
     test_path,
     save_path,
+    diagnostic_path,
     lines,
     wave,
     chi,
@@ -425,6 +426,8 @@ def sunnynet_predict_populations(
         chi=chi,
         levels=levels,
         atom_names=atom_names,
+        model_dir=MODE,
+        diagnostic_path=diagnostic_path
     )
 
     pops = predict_populations(

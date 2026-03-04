@@ -249,6 +249,8 @@ def predict():
 
         OUTPUT_FILE  = MODEL_DIR + f"sunnynet_output_3D_sim_s5_{PRED_ATMOS['NAME']}_{MODEL_TYPE}_{TAG}.hdf5"
 
+        DIAGNOSTIC_SAVE_PATH = MODEL_DIR + f"prediction_diagnostics_{PRED_ATMOS['NAME']}.json"
+
         if not os.path.exists(OUTPUT_FILE):
 
             SunnyNet.sunnynet_predict_populations(
@@ -256,6 +258,7 @@ def predict():
                 IODIR+TRAIN_FILE,
                 PREDICT_FILE,
                 OUTPUT_FILE,
+                DIAGNOSTIC_SAVE_PATH,
                 lines=lines,
                 wave=wave,
                 chi=chi,
