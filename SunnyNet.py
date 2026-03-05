@@ -27,7 +27,7 @@ from interp_utils import interpolate_everything
 # ---------------- PREPROCESSING ------------------------------
 # ============================================================
 
-def _prepare_input_features(temp, vx, vy, vz, ne):
+def _prepare_input_features(temp, vx, vy, vz, ne, rho):
 
     return np.stack(
         [
@@ -36,6 +36,7 @@ def _prepare_input_features(temp, vx, vy, vz, ne):
             vy / 100,
             vz / 100,
             np.log10(ne),
+            np.log10(rho)
         ],
         axis=-1,
     )
@@ -54,7 +55,7 @@ def _make_inputs_ch_first(
     cmass_grid = np.logspace(-6, 2, ndep)
     pad_cfg = ((pad, pad), (pad, pad), (0, 0), (0, 0))
 
-    features = _prepare_input_features(temp, vx, vy, vz, ne)
+    features = _prepare_input_features(temp, vx, vy, vz, ne, rho)
 
     features = interpolate_everything(
         rho, z_scale, features, cmass_grid
@@ -343,7 +344,7 @@ def sunnynet_train_model(
         data_path=train_path,
         save_folder=save_folder,
         model_save=save_file,
-        early_stopping=10,
+        early_stopping=5,
         num_epochs=50,
         train_size=tr,
         val_size=te,
