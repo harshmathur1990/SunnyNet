@@ -343,7 +343,7 @@ def prediction_error_density_per_level(
         for idx, PRED_ATMOS in enumerate(MULTI3D_PRED_DATA):
 
             name = PRED_ATMOS["NAME"]
-            pred_file = MODEL_DIR + f"sunnynet_output_3D_sim_s5_{name}_{TAG}.hdf5"
+            pred_file = MODEL_DIR + f"sunnynet_output_3D_sim_s5_{name}_{MODEL_TYPE}_{TAG}.hdf5"
 
             with h5py.File(pred_file,"r") as f:
                 beta_pred = f["populations"][..., lev]
