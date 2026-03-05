@@ -36,6 +36,24 @@ default(show=false)
 # -----------------------------
 # MODE 1 — ML predicted pops
 # -----------------------------
+
+model  = "ContextToColumn3D"
+window = 7
+
+tag = "$(window)x$(window)"
+
+train_dir = "training_$(model)_$(tag)"
+
+pred_h5 = joinpath(
+    train_dir,
+    "sunnynet_output_3D_sim_s5_en024048_hion_385_$(model)_$(tag).hdf5"
+)
+
+out_h5 = joinpath(
+    train_dir,
+    "intensity_ml_en024048_hion_385_$(model)_$(tag).h5"
+)
+
 const CONFIG_ML = (
     mode = :ml,
 
@@ -63,10 +81,14 @@ const CONFIG_ML = (
     mesh_file  = "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/mesh",
     atmos_file = "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/atm3d",
 
-    pred_h5  = "sunnynet_output_3D_sim_s5_en024048_hion_385_ContextToColumn3D_7x7.hdf5",
+    model = model,
+    window = window,
+    tag = tag,
+
+    pred_h5 = pred_h5,
     pred_key = "populations",
 
-    out_h5     = "intensity_ml_en024048_hion_385_ContextToColumn3D_7x7.h5",
+    out_h5 = out_h5,
     out_prefix = "diag_ml",
 
     x_pick     = 33,
