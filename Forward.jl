@@ -140,7 +140,7 @@ const CONFIG_BIFROST = (
 
     
 
-    out_h5     = "intensity_bifrost.h5",
+    out_h5     = "IO/intensity_bifrost.h5",
     out_prefix = "diag_bifrost",
 
     x_pick     = 33,
@@ -164,8 +164,8 @@ const CONFIG_BIFROST = (
 # USER CHOOSES WHICH ONE TO RUN
 # ============================================================
 
-const CFG = CONFIG_ML
-# const CFG = CONFIG_BIFROST
+# const CFG = CONFIG_ML
+const CFG = CONFIG_BIFROST
 
 # -----------------------------
 # Column-mass remapping helpers
