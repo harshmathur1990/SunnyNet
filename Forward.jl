@@ -89,7 +89,7 @@ const CONFIG_ML = (
     pred_key = "populations",
 
     out_h5 = out_h5,
-    out_prefix = "diag_ml",
+    out_prefix = joinpath(train_dir, "diag_ml")
 
     x_pick     = 33,
     y_pick     = 21,
