@@ -39,6 +39,7 @@ default(show=false)
 
 model  = "ContextToColumn3D"
 window = 7
+snap = 465
 
 tag = "$(window)x$(window)"
 
@@ -46,12 +47,12 @@ train_dir = "training_$(model)_$(tag)"
 
 pred_h5 = joinpath(
     train_dir,
-    "sunnynet_output_3D_sim_s5_en024048_hion_385_$(model)_$(tag).hdf5"
+    "sunnynet_output_3D_sim_s5_en024048_hion_$(snap)_$(model)_$(tag).hdf5"
 )
 
 out_h5 = joinpath(
     train_dir,
-    "intensity_ml_en024048_hion_385_$(model)_$(tag).h5"
+    "intensity_ml_en024048_hion_$(snap)_$(model)_$(tag).h5"
 )
 
 const CONFIG_ML = (
@@ -61,7 +62,7 @@ const CONFIG_ML = (
         (
             name = "H",
             atom_file = "/mn/stornext/u3/harshm/Documents/WorkRepo/multi3d/input/atoms/atom.h6_tiago2.yaml",
-            pops_file = "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/H/out_pop",
+            pops_file = "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/$(snap)/H/out_pop",
             nlevels = 6,
             line_index = 5,
             lower_level = 2,
@@ -78,8 +79,8 @@ const CONFIG_ML = (
         # )
     ],
 
-    mesh_file  = "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/mesh",
-    atmos_file = "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/385/atm3d",
+    mesh_file  = "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/$(snap)/mesh",
+    atmos_file = "/mn/stornext/d9/data/harshm/bifrost_data/en024048_hion/$(snap)/atm3d",
 
     model = model,
     window = window,
@@ -87,6 +88,8 @@ const CONFIG_ML = (
 
     pred_h5 = pred_h5,
     pred_key = "populations",
+
+    plot_diagnostics = false,
 
     out_h5 = out_h5,
     out_prefix = joinpath(train_dir, "diag_ml"),
@@ -164,8 +167,8 @@ const CONFIG_BIFROST = (
 # USER CHOOSES WHICH ONE TO RUN
 # ============================================================
 
-# const CFG = CONFIG_ML
-const CFG = CONFIG_BIFROST
+const CFG = CONFIG_ML
+# const CFG = CONFIG_BIFROST
 
 # -----------------------------
 # Column-mass remapping helpers
@@ -589,7 +592,7 @@ function main()
     # ---------------------------------------------------------
     # Diagnostics: compare ML vs true NLTE if pops_file exists
     # ---------------------------------------------------------
-    if cfg.mode == :ml
+    if cfg.mode == :ml && cfg.plot_diagnostics
 
         println("Running diagnostics...")
 
