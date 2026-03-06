@@ -575,74 +575,74 @@ def main():
     # ---- PREDICT ----
     predict()
 
-    if atmos is None:
-        # ---- Load training blocks once (for diagnostics) ----
-        (
-            atmos, rho, z, temp, vx, vy, vz, ne, lte, nlte
-        ) = load_training_multi3d_data()
+    # if atmos is None:
+    #     # ---- Load training blocks once (for diagnostics) ----
+    #     (
+    #         atmos, rho, z, temp, vx, vy, vz, ne, lte, nlte
+    #     ) = load_training_multi3d_data()
 
-    cmass_grid = np.logspace(-6, 2, NDEP)
+    # cmass_grid = np.logspace(-6, 2, NDEP)
 
-    intrinsic = training_departure_density_per_level(
-        rho,
-        z,
-        lte,
-        nlte
-    )
+    # intrinsic = training_departure_density_per_level(
+    #     rho,
+    #     z,
+    #     lte,
+    #     nlte
+    # )
 
-    plot_density_grid_with_stats(
-        intrinsic,
-        cmass_grid,
-        r"$|\log_{10}\beta|$",
-        MODEL_DIR + f"NLTE_intrinsic_levels_stats_{MODEL_TYPE}_{TAG}.pdf"
-    )
+    # plot_density_grid_with_stats(
+    #     intrinsic,
+    #     cmass_grid,
+    #     r"$|\log_{10}\beta|$",
+    #     MODEL_DIR + f"NLTE_intrinsic_levels_stats_{MODEL_TYPE}_{TAG}.pdf"
+    # )
 
-    ml = prediction_error_density_per_level(
-        rho,
-        z,
-        lte,
-        nlte
-    )
+    # ml = prediction_error_density_per_level(
+    #     rho,
+    #     z,
+    #     lte,
+    #     nlte
+    # )
 
-    plot_density_grid_with_stats(
-        ml,
-        cmass_grid,
-        r"$|\Delta\log_{10}\beta|$",
-        MODEL_DIR + f"SunnyNet_error_levels_stats_{MODEL_TYPE}_{TAG}.pdf"
-    )
+    # plot_density_grid_with_stats(
+    #     ml,
+    #     cmass_grid,
+    #     r"$|\Delta\log_{10}\beta|$",
+    #     MODEL_DIR + f"SunnyNet_error_levels_stats_{MODEL_TYPE}_{TAG}.pdf"
+    # )
 
-    # --------------------------------------------------
-    # QUANTIFY PERFORMANCE
-    # --------------------------------------------------
+    # # --------------------------------------------------
+    # # QUANTIFY PERFORMANCE
+    # # --------------------------------------------------
 
-    stats = quantify_all_levels(
-        ml,
-        intrinsic
-    )
+    # stats = quantify_all_levels(
+    #     ml,
+    #     intrinsic
+    # )
 
-    print("\n=== LEVEL STATISTICS ===")
+    # print("\n=== LEVEL STATISTICS ===")
 
-    for lev, s in enumerate(stats):
+    # for lev, s in enumerate(stats):
 
-        print(
-            f"""
-            Level {lev}
-            -----------
-            Median error        : {s['median']:.3f}
-            P95 error           : {s['p95']:.3f}
-            Catastrophic frac   : {s['catastrophic_frac']:.3f}
-            Width68             : {s['width68']:.3f}
-            Physics ratio       : {s['physics_ratio']:.3f}
-            """
-        )
+    #     print(
+    #         f"""
+    #         Level {lev}
+    #         -----------
+    #         Median error        : {s['median']:.3f}
+    #         P95 error           : {s['p95']:.3f}
+    #         Catastrophic frac   : {s['catastrophic_frac']:.3f}
+    #         Width68             : {s['width68']:.3f}
+    #         Physics ratio       : {s['physics_ratio']:.3f}
+    #         """
+    #     )
 
-    with open(MODEL_DIR + f"diagnostics_{MODEL_TYPE}_{TAG}.json","w") as f:
-        json.dump(
-            stats,
-            f,
-            indent=2,
-            default=lambda x: float(x)
-        )
+    # with open(MODEL_DIR + f"diagnostics_{MODEL_TYPE}_{TAG}.json","w") as f:
+    #     json.dump(
+    #         stats,
+    #         f,
+    #         indent=2,
+    #         default=lambda x: float(x)
+    #     )
 
     print("\n=== PIPELINE COMPLETE ===")
 
