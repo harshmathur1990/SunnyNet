@@ -578,25 +578,16 @@ def main():
     if atmos is None:
         # ---- Load training blocks once (for diagnostics) ----
         (
-            atmos_list,
-            rho_list,
-            z_list,
-            temp_list,
-            vx_list,
-            vy_list,
-            vz_list,
-            ne_list,
-            lte_blocks,
-            nlte_blocks,
+            atmos, rho, z, temp, vx, vy, vz, ne, lte, nlte
         ) = load_training_multi3d_data()
 
     cmass_grid = np.logspace(-6, 2, NDEP)
 
     intrinsic = training_departure_density_per_level(
-        rho_list,
-        z_list,
-        lte_blocks,
-        nlte_blocks
+        rho,
+        z,
+        lte,
+        nlte
     )
 
     plot_density_grid_with_stats(
@@ -607,10 +598,10 @@ def main():
     )
 
     ml = prediction_error_density_per_level(
-        rho_list,
-        z_list,
-        lte_blocks,
-        nlte_blocks
+        rho,
+        z,
+        lte,
+        nlte
     )
 
     plot_density_grid_with_stats(
